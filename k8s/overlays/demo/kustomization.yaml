@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# demo: 시연용. 오토스케일 없이 replica 를 2로 고정해 시연 중 변동이 없게 한다.
+namespace: shoppinglive-demo
+namePrefix: demo-
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: demo

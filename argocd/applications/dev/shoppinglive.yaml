@@ -1,0 +1,27 @@
+# dev 환경 Application 골격 — 이 레포의 k8s/overlays/dev 를 가리킨다.
+#
+# 상태: 아직 클러스터에 적용하지 않았다. 매니페스트가 안정된 뒤 ArgoCD 를 붙일 때 사용한다.
+# dev 는 main 에 머지되면 자동 동기화한다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shoppinglive-dev
+  namespace: argocd
+spec:
+  project: shoppinglive
+
+  source:
+    repoURL: https://github.com/2026-2-rising-sun/Infra.git
+    targetRevision: main
+    path: k8s/overlays/dev
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shoppinglive-dev
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

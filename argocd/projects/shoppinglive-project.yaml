@@ -1,0 +1,33 @@
+# ArgoCD AppProject 골격.
+#
+# 상태: 아직 어떤 클러스터에도 적용하지 않았다.
+# 초기에는 CI 의 `kubectl apply` 로 배포하고, 매니페스트가 안정된 뒤 ArgoCD 를 붙인다.
+# 붙이는 시점에 destinations.server 를 실제 클러스터 주소로 바꾼다.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: shoppinglive
+  namespace: argocd
+spec:
+  description: 라이브 커머스 서비스 (2026-2-rising-sun)
+
+  sourceRepos:
+    - https://github.com/2026-2-rising-sun/Infra.git
+
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: shoppinglive-dev
+    - server: https://kubernetes.default.svc
+      namespace: shoppinglive-perf
+    - server: https://kubernetes.default.svc
+      namespace: shoppinglive-demo
+
+  # 애플리케이션이 만드는 네임스페이스 범위 리소스는 제한하지 않는다.
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+
+  # 클러스터 범위 리소스는 Namespace 생성만 허용한다.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace

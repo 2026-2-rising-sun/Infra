@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# perf: 부하 테스트용. 지금은 replica 2 + 넉넉한 리소스로 시작하고,
+# HPA 는 실제 부하 지표(tests/performance)를 확보한 뒤 붙인다.
+#   - limits 대비 requests 를 낮게 잡아 HPA 의 CPU 목표치가 의미를 갖도록 여지를 남겼다.
+#   - HPA 를 추가할 때는 이 overlay 에 hpa.yaml 을 넣고 resources 에 등록한다.
+#     그 시점에는 아래 replicas patch 를 빼야 HPA 와 충돌하지 않는다.
+namespace: shoppinglive-perf
+namePrefix: perf-
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 2Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: perf

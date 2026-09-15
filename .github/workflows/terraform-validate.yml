@@ -1,0 +1,44 @@
+name: terraform-validate
+
+# terraform 디렉터리를 건드리는 PR 에서만 돈다.
+# fmt/validate 만 실행하므로 AWS 자격증명이 필요 없고, 아무 리소스도 만들지 않는다.
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive terraform/
+
+      # envs/* 의 각 루트 모듈을 따로 init/validate 한다.
+      # backend=false 로 상태 백엔드 접속 없이 검증만 수행한다.
+      - name: terraform validate
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          roots=(terraform/envs/*/main.tf)
+          if [ ${#roots[@]} -eq 0 ]; then
+            echo "No terraform root modules under terraform/envs — nothing to validate"
+            exit 0
+          fi
+          for root in "${roots[@]}"; do
+            dir="$(dirname "$root")"
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
