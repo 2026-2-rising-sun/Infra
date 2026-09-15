@@ -13,3 +13,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/labeler@v5
+
+  size-label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: codelytv/pr-size-labeler@v1.10.0
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          xs_label: "size/XS"
+          xs_max_size: "9"
+          s_label: "size/S"
+          s_max_size: "29"
+          m_label: "size/M"
+          m_max_size: "99"
+          l_label: "size/L"
+          l_max_size: "499"
+          xl_label: "size/XL"
+          fail_if_xl: "false"
