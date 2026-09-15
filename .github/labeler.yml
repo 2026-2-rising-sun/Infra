@@ -1,0 +1,33 @@
+terraform:
+  - changed-files:
+      - any-glob-to-any-file: "terraform/**"
+
+k8s:
+  - changed-files:
+      - any-glob-to-any-file: "k8s/**"
+
+local-dev:
+  - changed-files:
+      - any-glob-to-any-file: "local/**"
+
+argocd:
+  - changed-files:
+      - any-glob-to-any-file: "argocd/**"
+
+observability:
+  - changed-files:
+      - any-glob-to-any-file: "observability/**"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: "tests/**"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/workflows/**"
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "**/README.md"
