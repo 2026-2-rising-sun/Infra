@@ -16,7 +16,7 @@ docker compose -f local/docker-compose.yml ps
 |---|---|---|
 | PostgreSQL | `postgres:16-alpine` | 5432 |
 | Redis | `redis:7-alpine` | 6379 |
-| Kafka (KRaft, Zookeeper 없음) | `bitnami/kafka:3.7` | 29092 |
+| Kafka (KRaft, Zookeeper 없음) | `apache/kafka:4.0.0` | 29092 |
 
 ## Backend 연결 정보
 
