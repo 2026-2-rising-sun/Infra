@@ -1,0 +1,70 @@
+# 5개 백엔드 서비스의 단일 진입점.
+#
+# 전제
+#   - 클러스터에 ingress-nginx 컨트롤러가 설치돼 있어야 한다 (ingressClassName: nginx).
+#     설치는 terraform/modules/eks 를 채울 때 함께 결정한다.
+#   - 별도 API 게이트웨이 서비스를 두지 않는다. Frontend 는 이 Ingress 호스트 하나만 바라보고,
+#     경로 앞부분(/api/<도메인>)으로 어느 서비스에 갈지 결정된다.
+#   - rewrite-target 과 캡처 그룹 문법은 ingress-nginx 전용이다.
+#     다른 컨트롤러(AWS LB Controller 등)로 바꾸면 이 파일을 다시 써야 한다.
+#
+# 라우팅 규칙
+#   /api/member/**       -> member-service:8080
+#   /api/shopping/**     -> shopping-service:8080
+#   /api/commerce/**     -> commerce-service:8080
+#   /api/live/**         -> live-service:8080
+#   /api/notification/** -> notification-service:8080
+#
+# 경로 prefix 는 각 서비스로 넘길 때 제거된다.
+# 예) GET /api/member/v1/users/1 -> member-service 는 /v1/users/1 로 받는다.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shoppinglive
+  labels:
+    app.kubernetes.io/name: shoppinglive
+    app.kubernetes.io/part-of: shoppinglive
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    # TODO: 실제 도메인이 정해지면 host 를 지정한다. 지금은 호스트 무관하게 매칭된다.
+    - http:
+        paths:
+          - path: /api/member(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: member-service
+                port:
+                  name: http
+          - path: /api/shopping(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: shopping-service
+                port:
+                  name: http
+          - path: /api/commerce(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: commerce-service
+                port:
+                  name: http
+          - path: /api/live(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: live-service
+                port:
+                  name: http
+          - path: /api/notification(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: notification-service
+                port:
+                  name: http

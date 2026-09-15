@@ -1,0 +1,53 @@
+# live-service — 라이브 방송 도메인
+# 컨테이너 포트는 5개 서비스 모두 8080 으로 통일한다.
+# 로컬에서 5개를 한 호스트에 동시에 띄울 때만 서비스별 포트(live-service = 8084)를 쓴다.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: live-service
+  labels:
+    app.kubernetes.io/name: live-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: live-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: live-service
+        app.kubernetes.io/part-of: shoppinglive
+    spec:
+      containers:
+        - name: live-service
+          # TODO: CI 가 커밋 SHA 태그를 채우면 latest 대신 고정 태그로 바꾼다.
+          image: ghcr.io/2026-2-rising-sun/live-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: dev
+            - name: SERVER_PORT
+              value: "8080"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

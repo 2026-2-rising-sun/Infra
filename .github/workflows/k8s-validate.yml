@@ -1,0 +1,28 @@
+name: k8s-validate
+
+# k8s 매니페스트를 건드리는 PR 에서만 돈다.
+# 각 overlay 를 렌더링해 kustomize 오류(참조 깨짐, patch 경로 불일치 등)를 잡는다.
+# 클러스터에 접속하지 않으며 아무것도 배포하지 않는다.
+on:
+  pull_request:
+    paths:
+      - 'k8s/**'
+      - '.github/workflows/k8s-validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  kustomize-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, perf, demo]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-kubectl@v4
+
+      - name: Render k8s/overlays/${{ matrix.env }}
+        run: kubectl kustomize "k8s/overlays/${{ matrix.env }}"

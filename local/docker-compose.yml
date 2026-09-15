@@ -1,0 +1,85 @@
+# 로컬 개발용 미들웨어 스택 (PostgreSQL / Redis / Kafka)
+# 사용법:
+#   cp .env.example .env
+#   docker compose -f local/docker-compose.yml up -d
+#
+# Backend 각 서비스의 application-local.yml 이 여기 정의된 포트/자격증명을 그대로 사용한다.
+# 값을 바꾸면 Backend 레포의 application-local.yml 도 함께 고쳐야 한다. (../README.md 참고)
+
+name: shoppinglive-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: shoppinglive-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shoppinglive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      # init 스크립트가 아래 목록을 읽어 서비스별 DB 를 하나씩 생성한다.
+      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_MULTIPLE_DATABASES:-member,shopping,commerce,live,notification}
+      POSTGRES_DB: ${POSTGRES_USER:-shoppinglive}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shoppinglive}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: shoppinglive-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Kafka 단일 브로커. 공식 Apache 이미지이고 4.x 는 KRaft 전용이라 Zookeeper 가 아예 없다.
+  # 한 프로세스가 컨트롤러와 브로커를 겸한다.
+  #
+  # 로컬 Kafka 데이터는 볼륨에 보존하지 않는다. 컨테이너를 다시 만들면 토픽/메시지가 사라지지만,
+  # 로컬에서는 auto-create 로 다시 생기므로 문제되지 않고 볼륨 권한 문제를 피할 수 있다.
+  kafka:
+    image: apache/kafka:4.0.0
+    container_name: shoppinglive-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      # PLAINTEXT = 컨테이너 사이, EXTERNAL = 호스트에서 접속.
+      # advertised 주소가 달라야 해서 리스너를 둘로 나눠 뒀다.
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:${KAFKA_PORT:-29092}"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      # 단일 브로커라 복제본을 1로 낮춰야 내부 토픽이 생성된다.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      # 호스트(=Backend 로컬 실행)에서는 EXTERNAL 리스너로 붙는다.
+      - "${KAFKA_PORT:-29092}:29092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:

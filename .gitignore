@@ -1,0 +1,22 @@
+# 로컬 환경 값 (.env.example 만 커밋한다)
+.env
+local/.env
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# 에이전트 작업 아티팩트
+.omc/
+
+# OS
+.DS_Store

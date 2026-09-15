@@ -1,0 +1,26 @@
+# demo 환경 Application 골격 — 이 레포의 k8s/overlays/demo 를 가리킨다.
+#
+# 상태: 아직 클러스터에 적용하지 않았다. 매니페스트가 안정된 뒤 ArgoCD 를 붙일 때 사용한다.
+# demo 는 시연 직전에만 수동으로 동기화한다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shoppinglive-demo
+  namespace: argocd
+spec:
+  project: shoppinglive
+
+  source:
+    repoURL: https://github.com/2026-2-rising-sun/Infra.git
+    targetRevision: main
+    path: k8s/overlays/demo
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shoppinglive-demo
+
+  syncPolicy:
+    # 시연 중 재배포를 막기 위해 수동 동기화로 둔다.
+    # 시연에 쓸 커밋이 정해지면 targetRevision 을 그 태그로 고정한다.
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: member-service
+  labels:
+    app.kubernetes.io/name: member-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: member-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
