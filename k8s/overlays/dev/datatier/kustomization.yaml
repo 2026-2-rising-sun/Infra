@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# dev 네임스페이스 안에 직접 띄우는 미들웨어. local/docker-compose.yml 과 같은 구성을 옮긴 것이라
+# Backend 의 dev 프로필은 local 프로필에서 호스트만 바꾼 형태가 된다.
+#
+# namePrefix 를 붙이지 않는다. Backend 가 Service 이름(postgres/redis/kafka)으로 접속하므로
+# 애플리케이션 설정에 overlay 의 prefix 규약이 새어 나가지 않게 한다.
+#
+# perf/demo 는 나중에 관리형 서비스로 갈 수 있어서 base 가 아니라 dev overlay 에만 둔다.
+resources:
+  - postgres.yaml
+  - redis.yaml
+  - kafka.yaml

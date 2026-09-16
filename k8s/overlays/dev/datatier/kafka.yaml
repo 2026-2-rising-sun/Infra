@@ -1,0 +1,114 @@
+# dev 전용 Kafka 단일 브로커. local/docker-compose.yml 의 kafka 서비스를 k8s 로 옮긴 것이다.
+#
+# 공식 Apache 이미지이고 4.x 는 KRaft 전용이라 Zookeeper 가 없다. 한 프로세스가 컨트롤러와 브로커를 겸한다.
+# local 과 마찬가지로 로그 디렉터리를 보존하지 않는다(emptyDir). pod 가 다시 뜨면 토픽/메시지가
+# 사라지지만 auto-create 로 다시 생기므로 dev 에서는 문제되지 않는다.
+# 클러스터 안에서만 접속하므로 local 에 있던 EXTERNAL 리스너는 뺐다.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: kafka
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: kafka
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  replicas: 1
+  # 단일 브로커라 롤링 중 두 개가 겹치면 컨트롤러 쿼럼이 깨진다.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka
+        app.kubernetes.io/part-of: shoppinglive
+    spec:
+      securityContext:
+        # apache/kafka 이미지는 uid 1000(appuser)으로 돌아서 emptyDir 에 쓰려면 그룹을 맞춰야 한다.
+        fsGroup: 1000
+      containers:
+        - name: kafka
+          image: apache/kafka:4.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: kafka
+              containerPort: 9092
+            - name: controller
+              containerPort: 9093
+          env:
+            - name: KAFKA_NODE_ID
+              value: "1"
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: "1@localhost:9093"
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://:9092,CONTROLLER://:9093"
+            # 같은 네임스페이스의 파드는 Service 이름만으로 붙는다.
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka:9092"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            # 단일 브로커라 복제본을 1로 낮춰야 내부 토픽이 생성된다.
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: "0"
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "true"
+            - name: KAFKA_LOG_DIRS
+              value: /var/lib/kafka/data
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+          # local 의 healthcheck 는 kafka-topics.sh 를 썼지만 여기서는 쓸 수 없다.
+          # advertised listener 가 Service 이름(kafka)이라 CLI 가 부트스트랩 후 ClusterIP 로 다시 붙는데,
+          # 그 Service 의 엔드포인트는 이 파드가 Ready 여야 생긴다 — 프로브가 자기 자신을 기다리는 교착이 된다.
+          # 리스너가 연결을 받기 시작했는지만 보면 충분하고, 프로브마다 JVM 을 띄우지 않아도 된다.
+          readinessProbe:
+            tcpSocket:
+              port: kafka
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 10
+          livenessProbe:
+            tcpSocket:
+              port: kafka
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: data
+          emptyDir: {}

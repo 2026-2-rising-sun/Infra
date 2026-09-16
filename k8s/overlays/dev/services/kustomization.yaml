@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# dev 애플리케이션 계층. replica 1, 리소스 요청을 가장 낮게 잡는다.
+namePrefix: dev-
+
+resources:
+  - ../../../base
+
+# 컨테이너 이름이 서비스마다 달라 strategic merge 로는 한 번에 못 고친다.
+# 모든 Deployment 가 컨테이너 1개짜리 같은 모양이므로 인덱스 0 을 대상으로 한다.
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 50m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: dev
