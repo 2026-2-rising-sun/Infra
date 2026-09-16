@@ -14,5 +14,6 @@ kind: Kustomization
 namespace: shoppinglive-dev
 
 resources:
+  - namespace.yaml
   - services
   - datatier
