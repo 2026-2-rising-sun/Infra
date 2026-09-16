@@ -10,6 +10,7 @@ namespace: shoppinglive-perf
 namePrefix: perf-
 
 resources:
+  - namespace.yaml
   - ../../base
 
 patches:

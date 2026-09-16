@@ -6,6 +6,7 @@ namespace: shoppinglive-demo
 namePrefix: demo-
 
 resources:
+  - namespace.yaml
   - ../../base
 
 patches:
