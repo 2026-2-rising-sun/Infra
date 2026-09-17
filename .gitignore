@@ -18,5 +18,10 @@ kubeconfig
 # 에이전트 작업 아티팩트
 .omc/
 
+# IDE
+.idea/
+*.iml
+.vscode/
+
 # OS
 .DS_Store
