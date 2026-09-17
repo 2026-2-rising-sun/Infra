@@ -1,0 +1,23 @@
+# 로컬 kind 클러스터 전용. Kubernetes Dashboard 로그인에 쓸 cluster-admin 계정이다.
+# 공유 클러스터에는 절대 적용하지 않는다 (토큰만 있으면 클러스터 전체 권한을 가진다).
+#
+#   kubectl apply -f k8s/local/dashboard-admin.yaml
+#   kubectl -n kubernetes-dashboard create token admin-user --duration=24h
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kubernetes-dashboard
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: admin-user
+    namespace: kubernetes-dashboard

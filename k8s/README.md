@@ -9,12 +9,14 @@ k8s/
 │   │   └── {deployment.yaml,service.yaml,kustomization.yaml}
 │   ├── ingress.yaml          # 5개 서비스의 단일 진입점 (path 라우팅)
 │   └── kustomization.yaml
-└── overlays/
-    ├── dev/
-    │   ├── kustomization.yaml    # services + datatier 를 묶는다
-    │   ├── services/             # base + namePrefix(dev-) + replica/리소스/프로필 patch
-    │   └── datatier/             # dev 전용 Postgres/Redis/Kafka
-    └── {perf,demo}/kustomization.yaml
+├── overlays/
+│   ├── dev/
+│   │   ├── kustomization.yaml    # services + datatier 를 묶는다
+│   │   ├── services/             # base + namePrefix(dev-) + replica/리소스/프로필 patch
+│   │   ├── datatier/             # dev 전용 Postgres/Redis/Kafka
+│   │   └── tools/                # Kafka UI, Redis Insight (수동 적용, ArgoCD 동기화 대상 아님)
+│   └── {perf,demo}/kustomization.yaml
+└── local/                        # 로컬 kind 클러스터 전용 (Dashboard 계정, port-forward 스크립트)
 ```
 
 ## 진입점
@@ -77,7 +79,76 @@ kubectl kustomize k8s/base
 kubectl kustomize k8s/overlays/dev
 ```
 
-`.github/workflows/k8s-validate.yml` 이 PR 마다 세 overlay 를 전부 렌더링해 본다.
+`.github/workflows/k8s-validate.yml` 이 PR 마다 세 overlay 와 `dev/tools` 를 렌더링해 본다.
+
+## 로컬 kind 클러스터에서 dev 띄우기
+
+공유 dev 환경에 올리기 전에 서비스 5개와 미들웨어를 한 번에 띄워 보는 절차다.
+서비스 이미지는 Backend CI 가 GHCR 에 올린 `:latest` 를 받는다(amd64/arm64 멀티아키텍처).
+
+**준비물**: Docker Desktop, `kubectl`, `kind` (`brew install kind`)
+
+### 1. 클러스터와 대시보드
+
+```sh
+kind create cluster --name shoppinglive-dev
+
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+kubectl apply -f k8s/local/dashboard-admin.yaml
+kubectl -n kubernetes-dashboard create token admin-user --duration=24h   # 로그인 토큰
+```
+
+### 2. 배포
+
+미들웨어를 먼저 올리고 준비된 뒤 서비스를 올린다. 한 번에 올리면 서비스가 Postgres 보다 먼저 떠서
+`Connection refused` 로 몇 번 재시작하고, 재시작 대기 시간(CrashLoopBackOff)이 점점 길어진다.
+
+```sh
+NS=shoppinglive-dev
+kubectl apply -k k8s/overlays/dev                      # 전체 적용 (네임스페이스 포함)
+for d in postgres redis kafka; do kubectl rollout status deploy/$d -n $NS --timeout=10m; done
+
+# 미들웨어 준비 후 서비스만 재시작한다. 라벨(part-of=shoppinglive)은 미들웨어에도 붙어 있어서
+# 라벨로 고르면 Postgres 까지 재시작되니 이름으로 지정한다.
+# (목록을 변수에 담지 않는다. zsh 는 따옴표 없는 변수를 단어로 나누지 않는다.)
+kubectl rollout restart -n $NS deploy/dev-member-service deploy/dev-shopping-service \
+  deploy/dev-commerce-service deploy/dev-live-service deploy/dev-notification-service
+for d in member shopping commerce live notification; do
+  kubectl rollout status deploy/dev-$d-service -n $NS --timeout=5m
+done
+kubectl get pods -n $NS                                # 전부 1/1 Running 이면 정상
+
+kubectl apply -k k8s/overlays/dev/tools                # 선택: Kafka UI, Redis Insight
+```
+
+### 3. 접속
+
+```sh
+./k8s/local/port-forward-dev.sh          # 아래 포트를 한 번에 연결, Ctrl+C 로 종료
+kubectl proxy                            # 대시보드용, 다른 터미널에서
+```
+
+| 대상 | 주소 |
+|---|---|
+| 서비스 헬스체크 | http://localhost:9081/actuator/health (member) … 9085 (notification) |
+| Kubernetes Dashboard | http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/ |
+| Kafka UI | http://localhost:28080 |
+| Redis Insight | http://localhost:25540 (처음 한 번 Host `redis`, Port `6379` 로 등록) |
+| Postgres | `localhost:25432`, 계정 `shoppinglive` / `changeme` |
+| Redis | `localhost:26379` |
+
+- 서비스는 IntelliJ 로컬 실행 포트(8081~8085)와 겹치지 않게 9081~9085 를 쓴다.
+- Postgres/Redis 는 `local/docker-compose.yml` 과 동시에 켜 둘 수 있게 25432/26379 를 쓴다.
+- Kafka 브로커는 호스트로 연결하지 않는다. 브로커가 자기 주소를 `kafka:9092` 로 광고해서 호스트 클라이언트는
+  부트스트랩 이후 접속하지 못한다. Kafka UI 를 쓰거나 `kubectl exec -n shoppinglive-dev deploy/kafka -- /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list` 로 확인한다.
+
+### 4. 정리
+
+```sh
+kubectl delete -k k8s/overlays/dev/tools
+kubectl delete -k k8s/overlays/dev
+kind delete cluster --name shoppinglive-dev   # 클러스터째 삭제
+```
 
 ## 이미지 태그
 
