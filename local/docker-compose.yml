@@ -80,6 +80,41 @@ services:
       timeout: 10s
       retries: 10
 
+  # --- 확인용 관리 UI (tools 프로필) ---
+  # 기본 `up` 에는 포함되지 않는다. 필요할 때만:
+  #   docker compose -f local/docker-compose.yml --profile tools up -d
+  # 인증을 켜지 않았으므로 로컬에서만 쓴다.
+  kafka-ui:
+    image: kafbat/kafka-ui:v1.5.0
+    container_name: shoppinglive-kafka-ui
+    profiles: ["tools"]
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: shoppinglive-local
+      # 컨테이너끼리는 PLAINTEXT 리스너(kafka:9092)로 붙는다.
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "${KAFKA_UI_PORT:-8090}:8080"
+
+  # 처음 접속하면 "Add Redis database" 에서 Host: redis, Port: 6379 로 한 번 등록한다.
+  # 등록 정보는 redisinsight-data 볼륨에 남는다.
+  redisinsight:
+    image: redis/redisinsight:3.8.0
+    container_name: shoppinglive-redisinsight
+    profiles: ["tools"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "${REDISINSIGHT_PORT:-5540}:5540"
+    volumes:
+      - redisinsight-data:/data
+
 volumes:
   postgres-data:
   redis-data:
+  redisinsight-data:

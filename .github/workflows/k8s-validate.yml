@@ -18,7 +18,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [dev, perf, demo]
+        # dev/tools 는 overlay 가 아니라 수동 적용용 묶음이지만 렌더링 오류는 같이 잡는다.
+        env: [dev, dev/tools, perf, demo]
     steps:
       - uses: actions/checkout@v4
 

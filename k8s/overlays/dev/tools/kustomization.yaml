@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# dev 네임스페이스의 미들웨어를 눈으로 확인하는 관리 UI. 필요할 때만 수동으로 적용한다.
+#   kubectl apply -k k8s/overlays/dev/tools
+#
+# 상위 dev/kustomization.yaml 에 넣지 않는다. ArgoCD 가 k8s/overlays/dev 를 공유 dev 환경에
+# 동기화하므로, 거기 포함되면 인증 없는 관리 UI 가 공유 환경에도 같이 뜬다.
+#
+# 네임스페이스는 반드시 datatier 와 같아야 한다. Kafka 가 자기 주소를 Service 짧은 이름(kafka:9092)으로
+# 광고하기 때문에, 다른 네임스페이스의 클라이언트는 부트스트랩 이후 브로커를 찾지 못한다.
+namespace: shoppinglive-dev
+
+resources:
+  - kafka-ui.yaml
+  - redisinsight.yaml

@@ -1,0 +1,57 @@
+# Redis Insight. 키 탐색과 CLI 를 제공한다. 인증을 켜지 않았으므로 로컬 클러스터에서만 쓴다.
+# 저장 볼륨이 없어서 pod 가 다시 뜨면 등록한 연결 정보가 사라진다.
+# 처음 접속하면 "Add Redis database" 에서 Host: redis, Port: 6379 로 한 번 등록한다.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redisinsight
+  labels:
+    app.kubernetes.io/name: redisinsight
+    app.kubernetes.io/part-of: shoppinglive-tools
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: redisinsight
+  ports:
+    - name: http
+      port: 5540
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redisinsight
+  labels:
+    app.kubernetes.io/name: redisinsight
+    app.kubernetes.io/part-of: shoppinglive-tools
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redisinsight
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redisinsight
+        app.kubernetes.io/part-of: shoppinglive-tools
+    spec:
+      containers:
+        - name: redisinsight
+          image: redis/redisinsight:3.8.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5540
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi

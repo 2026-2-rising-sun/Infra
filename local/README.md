@@ -18,6 +18,25 @@ docker compose -f local/docker-compose.yml ps
 | Redis | `redis:7-alpine` | 6379 |
 | Kafka (KRaft, Zookeeper 없음) | `apache/kafka:4.0.0` | 29092 |
 
+## 확인용 관리 UI (`tools` 프로필)
+
+기본 `up` 에는 포함되지 않는다. Kafka 토픽이나 Redis 키를 눈으로 볼 때만 띄운다.
+
+```sh
+docker compose -f local/docker-compose.yml --profile tools up -d
+```
+
+| 도구 | 이미지 | 주소 |
+|---|---|---|
+| Kafka UI | `kafbat/kafka-ui:v1.5.0` | http://localhost:8090 |
+| Redis Insight | `redis/redisinsight:3.8.0` | http://localhost:5540 |
+
+- Kafka UI 는 `shoppinglive-local` 클러스터로 자동 연결된다.
+- Redis Insight 는 처음 한 번 "Add Redis database" 에서 **Host `redis`, Port `6379`** 로 등록한다. `localhost` 가 아니다. 등록 정보는 볼륨에 남는다.
+- 인증을 켜지 않았으므로 로컬에서만 쓴다.
+
+내릴 때 `--profile tools` 를 빼고 `down` 하면 이 두 컨테이너는 남는다. 같이 내리려면 `--profile tools down`.
+
 ## Backend 연결 정보
 
 **이 값들이 Backend·Infra 두 레포 간 유일한 실질적 연결점이다.** 여기를 바꾸면 Backend 각 서비스의
