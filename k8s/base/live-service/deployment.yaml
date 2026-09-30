@@ -27,21 +27,47 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            - name: management
+              containerPort: 9090
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: dev
             - name: SERVER_PORT
               value: "8080"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "9090"
+            - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+              value: health
+            - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
+              value: never
+            - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_COMPONENTS
+              value: never
+            - name: MEMBER_JWT_PUBLIC_KEY_SET_LOCATION
+              value: file:/run/shoppinglive/jwt/member-public.jwks
+            - name: LIVE_SHOPPING_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: live-shopping-service-token
+                  key: token
+            - name: LIVE_COMMERCE_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: live-commerce-service-token
+                  key: token
+          volumeMounts:
+            - name: member-jwt-public
+              mountPath: /run/shoppinglive/jwt
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
-              port: http
+              port: management
             initialDelaySeconds: 15
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
-              port: http
+              port: management
             initialDelaySeconds: 30
             periodSeconds: 20
           resources:
@@ -51,3 +77,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+      volumes:
+        - name: member-jwt-public
+          configMap:
+            name: member-jwt-public
+            items:
+              - key: member-public.jwks
+                path: member-public.jwks

@@ -40,10 +40,12 @@ Frontend 는 이 Ingress 엔드포인트 하나만 호출한다.
 
 컨테이너 포트는 5개 서비스 모두 **8080** 으로 통일한다.
 서비스별 포트(member 8081 … notification 8085)는 **로컬에서 5개를 한 호스트에 동시에 띄울 때만** 쓴다.
+Member·Shopping·Commerce·Live의 health probe는 별도 관리 포트 **9090**을 사용한다.
+Service·Ingress에는 8080만 연결한다. 필수 JWKS·개인키·호출 토큰·TTL 입력은 [P2 인증 환경 입력](p2-security.md)을 따른다.
 
 ## 환경별 차이
 
-`base` 는 환경 공통이고, 차이는 overlay 의 patch 로만 표현한다. 현재는 replica 수, 리소스 값, `SPRING_PROFILES_ACTIVE` 세 가지뿐이다.
+`base`는 환경 공통 포트·보안 리소스 참조를 정의한다. overlay는 replica·리소스·프로필을 바꾸며, 참조하는 키와 토큰은 namespace마다 별도로 공급한다.
 
 | overlay | namespace | prefix | replicas | 성격 |
 |---|---|---|---|---|
@@ -102,6 +104,8 @@ kubectl -n kubernetes-dashboard create token admin-user --duration=24h   # 로�
 
 미들웨어를 먼저 올리고 준비된 뒤 서비스를 올린다. 한 번에 올리면 서비스가 Postgres 보다 먼저 떠서
 `Connection refused` 로 몇 번 재시작하고, 재시작 대기 시간(CrashLoopBackOff)이 점점 길어진다.
+P2 이미지를 적용하기 전에는 [필수 보안 리소스](p2-security.md)를 같은 namespace에 먼저 공급해야 한다.
+아래 절차만으로 인증 키·TTL 정책이나 외부 공개 환경이 준비되지는 않는다.
 
 ```sh
 NS=shoppinglive-dev
@@ -130,7 +134,7 @@ kubectl proxy                            # 대시보드용, 다른 터미널에�
 
 | 대상 | 주소 |
 |---|---|
-| 서비스 헬스체크 | http://localhost:9081/actuator/health (member) … 9085 (notification) |
+| 서비스 API | http://localhost:9081 (member) … 9085 (notification); Member~Live health는 별도 9090 probe |
 | Kubernetes Dashboard | http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/ |
 | Kafka UI | http://localhost:28080 |
 | Redis Insight | http://localhost:25540 (처음 한 번 Host `redis`, Port `6379` 로 등록) |
