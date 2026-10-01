@@ -22,30 +22,36 @@ Notification은 이번 인증 범위 밖이며 기존 8080 health probe를 유�
 ## 환경별 필수 리소스
 
 아래 리소스는 대상 namespace에서 운영자가 별도로 공급한다. 저장소에는 실제 값이나 키를 넣지 않는다.
-참조 대상이 Kustomize resources에 없으므로 이름에는 `dev-`, `demo-`, `perf-` 접두사가 붙지 않는다.
+외부 공급 리소스에는 `dev-`, `demo-`, `perf-` 접두사가 붙지 않는다.
+저장소가 관리하는 `member-session-policy` ConfigMap과 그 참조에는 환경 접두사가 자동으로 붙는다.
 namespace마다 서로 다른 키와 토큰을 사용하고 로컬 테스트·Mock 키를 외부 dev 신뢰키로 재사용하지 않는다.
 
 | 종류 / 이름 | 필수 key | 소비자 |
 | --- | --- | --- |
 | ConfigMap `member-jwt-public` | `member-public.jwks` | Member·Shopping·Commerce·Live |
 | Secret `member-jwt-private` | `member-private.pem` | Member만 |
-| ConfigMap `member-auth-policy` | `key-id`, `access-token-ttl`, `refresh-token-ttl` | Member만 |
+| ConfigMap `member-auth-policy` | `key-id` | Member만 |
+| ConfigMap `member-session-policy` (저장소 관리) | `access-token-ttl`, `refresh-token-ttl`, `member-base-url` | Member TTL · 세 consumer의 Member 주소 |
 | Secret `shopping-commerce-service-token` | `token` | Shopping 발신·Commerce 수신 |
 | Secret `commerce-shopping-service-token` | `token` | Commerce 발신·Shopping 수신 |
 | Secret `live-shopping-service-token` | `token` | Live 발신·Shopping 수신 |
 | Secret `live-commerce-service-token` | `token` | Live 발신·Commerce 수신 |
+| Secret `shopping-member-service-token` | `token` | Shopping 발신·Member 수신 |
+| Secret `commerce-member-service-token` | `token` | Commerce 발신·Member 수신 |
+| Secret `live-member-service-token` | `token` | Live 발신·Member 수신 |
 
 공개 JWKS 파일은 `/run/shoppinglive/jwt/member-public.jwks`에 읽기 전용으로 마운트한다.
 JWKS에는 RSA 공개키만 넣으며 issuer `shoppinglive-member`, audience `shoppinglive-api` 정책과 함께 사용한다.
 Member 개인키는 PKCS#8 PEM, RSA 2048비트 이상이며 `/run/shoppinglive/member-private/member-private.pem`에만 마운트한다.
 Member는 kid와 공개키의 RSA 파라미터가 개인키와 일치하는지 기동 시 검사한다.
 Member Pod의 `fsGroup: 20001`은 비루트 프로세스에 Secret 파일의 그룹 읽기를 제공하고 파일 모드는 0440이다.
-다른 서비스에는 개인키 Secret volume이나 발급 정책을 넣지 않는다.
+다른 서비스에는 개인키 Secret volume이나 TTL 환경변수를 넣지 않는다. 동일 ConfigMap에서 `member-base-url` key만 읽는다.
 
-TTL은 기본값 없이 필수 환경값으로 전달한다. 양수·초 단위로 표현 가능한 Java Duration을 사용한다.
-테스트에서 사용한 TTL은 운영 정책 승인이 아니며 이 저장소는 TTL 값을 결정하지 않는다.
-access/refresh 만료 정책과 철회·탈퇴 동작을 승인한 뒤 `member-auth-policy`를 공급해야 한다.
-리소스나 필수 key가 누락되면 Pod가 준비되지 않으며 임의 테스트키·기본 TTL로 우회하지 않는다.
+승인된 수명은 access `PT15M`, refresh family 최초 로그인부터 절대 `P30D`이다.
+`member-session-policy`가 두 TTL과 환경별 Member Service 주소를 제공하며 rotation으로 refresh 절대 만료를 연장하지 않는다.
+`member-auth-policy.key-id`는 실제 운영 공개키·개인키에 맞춰 별도 공급한다. 키나 caller Secret이 없으면 기동을 우회하지 않는다.
+일반 로그아웃은 refresh만 폐기하고 기존 access의 남은 수명을 허용한다.
+refresh 재사용·관리자 강제 폐기·탈퇴는 이후 신규 인증 검사부터 기존 access도 차단한다. 이미 통과한 요청을 소급 취소하지 않는다.
 
 ## 서비스 호출 자격증명
 
@@ -55,6 +61,9 @@ access/refresh 만료 정책과 철회·탈퇴 동작을 승인한 뒤 `member-a
 | `COMMERCE_SHOPPING_SERVICE_TOKEN` | Commerce → Shopping |
 | `LIVE_SHOPPING_SERVICE_TOKEN` | Live → Shopping |
 | `LIVE_COMMERCE_SERVICE_TOKEN` | Live → Commerce |
+| `SHOPPING_MEMBER_SERVICE_TOKEN` | Shopping → Member |
+| `COMMERCE_MEMBER_SERVICE_TOKEN` | Commerce → Member |
+| `LIVE_MEMBER_SERVICE_TOKEN` | Live → Member |
 
 방향마다 서로 다른 고엔트로피 32자 이상 opaque 토큰을 공급한다. 같은 방향의 발신자와 수신자만 값을 공유한다.
 수신 서비스는 `X-Service-Token`을 서버 설정과 비교해 caller를 결정하며 사용자·ADMIN JWT로 대체하지 않는다.
@@ -62,6 +71,16 @@ Secret은 필요한 key만 `secretKeyRef`로 읽고 `envFrom`으로 전체 Secre
 Secret 접근 RBAC·저장 시 암호화·운영 키 생성은 클러스터 운영자가 별도로 설정한다.
 환경변수와 JWT decoder는 기동 시 읽으므로 갱신 뒤에는 관련 서비스를 재기동하고 정상·거부 경로를 다시 검증한다.
 키·토큰 원문을 명령 출력, 로그, PR 또는 검증 artifact에 기록하지 않는다.
+
+## 세션 권위 확인
+
+각 서비스는 RS256 서명을 로컬 검증한 뒤 canonical UUID `sub`/`sid`를
+Member `POST /v1/internal/auth/sessions/check`에 방향별 caller 토큰으로 보낸다.
+`MEMBER_SESSION_BASE_URL`은 base `http://member-service:8080`, dev/demo/perf는 각각 접두사 Service 이름을 가리킨다.
+결과를 캐시하지 않으며 connect/read timeout은 각각 1초, retry·redirect는 하지 않는다.
+비활성 세션은 401, 통신·저장소·응답 검증 실패는 `SERVICE_UNAVAILABLE` 503으로 허용하지 않는다.
+Member가 불가해도 무토큰 공개 조회와 기존 서비스 caller 내부 요청은 이 확인에 의존하지 않는다.
+이 정책은 사용자 인증의 Member 가용성 의존성을 추가한다. 이 변경으로 HA·NetworkPolicy·외부 배포 완료를 주장하지 않는다.
 
 ## 적용 전 확인
 

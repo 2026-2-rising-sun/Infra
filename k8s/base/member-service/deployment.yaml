@@ -57,13 +57,28 @@ spec:
             - name: MEMBER_ACCESS_TOKEN_TTL
               valueFrom:
                 configMapKeyRef:
-                  name: member-auth-policy
+                  name: member-session-policy
                   key: access-token-ttl
             - name: MEMBER_REFRESH_TOKEN_TTL
               valueFrom:
                 configMapKeyRef:
-                  name: member-auth-policy
+                  name: member-session-policy
                   key: refresh-token-ttl
+            - name: SHOPPING_MEMBER_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: shopping-member-service-token
+                  key: token
+            - name: COMMERCE_MEMBER_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: commerce-member-service-token
+                  key: token
+            - name: LIVE_MEMBER_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: live-member-service-token
+                  key: token
           volumeMounts:
             - name: member-jwt-public
               mountPath: /run/shoppinglive/jwt

@@ -59,6 +59,16 @@ spec:
                 secretKeyRef:
                   name: live-commerce-service-token
                   key: token
+            - name: MEMBER_SESSION_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: member-session-policy
+                  key: member-base-url
+            - name: COMMERCE_MEMBER_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: commerce-member-service-token
+                  key: token
           volumeMounts:
             - name: member-jwt-public
               mountPath: /run/shoppinglive/jwt
