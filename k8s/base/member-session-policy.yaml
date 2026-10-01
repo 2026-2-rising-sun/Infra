@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: member-session-policy
+data:
+  # Approved lifetimes; rotation preserves the original login session deadline.
+  access-token-ttl: PT15M
+  refresh-token-ttl: P30D
+  member-base-url: http://member-service:8080

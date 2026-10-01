@@ -18,6 +18,10 @@ kubeconfig
 # 에이전트 작업 아티팩트
 .omc/
 
+# P2 팀 설명 문서는 Notion에서 관리한다.
+/k8s/p2-security.md
+/local/p2/README.md
+
 # IDE
 .idea/
 *.iml

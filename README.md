@@ -5,6 +5,10 @@
 라이브 커머스 서비스(`shoppinglive`)의 로컬 개발 환경, 쿠버네티스 매니페스트, 인프라 코드를 모아 둔 곳입니다.
 애플리케이션 코드는 별도 레포에 있습니다 — [Backend](https://github.com/2026-2-rising-sun/Backend), [Frontend](https://github.com/2026-2-rising-sun/Frontend).
 
+P2 팀 설명 문서는 [P2 문서 모음](https://app.notion.com/p/3ec226545d158172991cd0137f4c7132)에서 관리합니다.
+전용 로컬 DB와 배포 전 인증 설정은 [P2 Infra 가이드](https://app.notion.com/p/3ec226545d15811087c4c552be01e341)를 참고하세요.
+실행에 필요한 YAML과 스크립트는 이 저장소에서 관리합니다.
+
 ## 구조
 
 ```
