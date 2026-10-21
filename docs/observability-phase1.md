@@ -203,6 +203,33 @@ Frontend는 [5174](http://127.0.0.1:5174), Grafana는 [13000](http://127.0.0.1:1
 
 ![RedisInsight 실제 Live 시청자 ZSET·TTL](assets/observability-phase1/redis.jpg)
 
+## PR 리뷰 후 수정·실행 검증 (2026-10-22)
+
+4개 PR을 동작·회귀와 보안 관점에서 각각 검토했다. 리뷰에서 찾은 P2 3건과 후속 실행에서 발견한 Tempo 문제를 수정했다. Infra #13과 Backend #305에는 추가로 확정한 문제가 없었다. 병합하지 않았다.
+
+| 대상 | 문제와 수정 | 실제 확인 |
+|---|---|---|
+| Infra #14 대시보드 | `or`는 같은 라벨의 오른쪽 지표를 제외했다. 활성/대기, 커밋/롤백, 명령/축출을 별도 target·범례로 분리했다. 연결/키 수도 구분했다. | 수정 전 Hikari 5+5 시계열이 5개만 반환됨을 재현. 수정 후 Grafana의 활성·대기 범례와 각 조회 결과를 확인. PostgreSQL 커밋·롤백 각각 8개, Redis 명령·축출 각각 1개 반환 |
+| Backend #306 재입고 | 입력 이벤트 이름을 알림 타입과 혼동했다. 실제 알림 타입 `Restocked`를 계측 대상으로 수정했다. | 회귀 테스트 2건이 수정 전 실패. 수정 후 Notification 통합 테스트 56건 실패·스킵 0, 변경 대상 harness passed. 실제 Kafka 소비로 알림 77 생성, 같은 eventId의 Loki `applied` 로그·Prometheus Timer 확인 |
+| Infra #14 API 권한 | 공통 `observer`의 `nodes/proxy`를 제거하고 Prometheus·Alloy·kube-state-metrics 계정을 분리했다. 그 밖의 관측 Pod에는 토큰을 주입하지 않는다. | `kubectl auth can-i get nodes --subresource=proxy --as=...`가 모든 관측 계정에서 no. `--subresource=metrics`는 Prometheus만 yes. 앱/인프라/노드 13개 target 모두 up |
+| Infra #14 Tempo | 256MiB 한도에서 cgroup memory max 이벤트와 약 7.9 CPU 사용, trace 조회 502·시간 초과가 발생했다. 한도를 768MiB, GOMEMLIMIT 600MiB, GOMAXPROCS 2로 설정하고 5MiB/5분 블록·동시 flush 1개로 조정했다. | 새 상품 조회 trace `b7c392b150aa4f5c9ce2b81c3ba3972b`의 HTTP/JDBC span 9개 조회 성공. 장애 중 모든 trace의 보존을 보장하지 않으며 부하 성능 수치로 해석하지 않는다 |
+
+Kubernetes의 `nodes/proxy` GET은 단순 조회 권한이 아니다. [공식 보안 설명](https://kubernetes.io/docs/concepts/security/api-server-bypass-risks/)에 따라 회수했다. kubelet은 `nodes/metrics`로 직접 조회하며 TLS 검증을 유지한다. `deploy.py --apply`가 선택한 kind 노드와 Kubernetes 노드 목록을 대조하고 **공개** kubelet 인증서 체인을 읽어 ConfigMap에 넣는다. 노드 교체·인증서 갱신 후에는 같은 명령을 다시 실행한다. `--apply` 없는 출력은 구문 검사용 골격이며 인증서가 비어 있으므로 실제 설치에는 `--apply`를 사용한다. 기존 공통 ClusterRoleBinding·ClusterRole·ServiceAccount도 회수한다. Tempo 블록 옵션은 [사용 중인 2.8.2 소스](https://github.com/grafana/tempo/blob/v2.8.2/modules/ingester/config.go)를 기준으로 설정했다.
+
+재입고 검증 상품은 **266**, 알림은 **77**, eventId는 `b61d42f1-0a67-44d6-a1f2-192927e565ac`다. 품절을 만들기 위해 생성한 주문 `OD-20261022-620876`은 브라우저에서 취소해 재고를 복구했다. 별도 브라우저 구매 주문 `OD-20261022-929139`는 Mock 결제 후 환불 26까지 완료했다. Kafka UI에서 `PaymentSucceeded`와 `RefundCompleted`를 같은 결제 묶음 `PG-95125e5a-ec13-4b7d-a3de-454a87ef92dc`로 확인했다. Live 87 접속으로 RedisInsight의 `live:viewers:87` Length 1·TTL 115초도 확인했다.
+
+![수정 후 활성과 대기가 함께 표시되는 Grafana](assets/observability-phase1/review-services.jpg)
+
+![리뷰 후 실제 브라우저 Mock 결제](assets/observability-phase1/review-purchase.jpg)
+
+![리뷰 후 실제 브라우저 전체 환불](assets/observability-phase1/review-refund.jpg)
+
+![이번 구매와 환불의 Kafka 이벤트](assets/observability-phase1/review-kafka.jpg)
+
+![Tempo 수정 후 Shopping에서 Commerce로 이어지는 실제 9개 span](assets/observability-phase1/review-trace.jpg)
+
+이 수정은 업무 정책·API·이벤트 payload를 바꾸지 않는다. 프론트 기존 변경은 유지했고, PostgreSQL·Kafka·Redis Pod를 교체하지 않았다. Notification 교체 전 설정과 업로드 파일을 별도 보호 디렉터리에 백업했다. 권한 분리 설정 재적용 전후 관측 Pod UID 12개가 같음을 확인했다. 다중 물리 노드·실제 PG/IVS·부하테스트는 여전히 범위 밖이다.
+
 ## 팀원은 시나리오별로 다음 실험을 이어간다
 
 1단계 완료 기준은 **동작 → 데이터 → 화면이 연결되고 재현 가능한가**다. 이후에는 `시나리오·불변식 정의 → 스크립트 → 기준 측정 → 병목 가설 → 개선 → 같은 조건 재측정`을 반복한다.

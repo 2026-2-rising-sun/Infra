@@ -140,8 +140,13 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "hikaricp_connections_active{service=~\"$service\"} or hikaricp_connections_pending{service=~\"$service\"}",
-          "legendFormat": "{{service}} {{uri}} {{result}} {{event_type}} {{datname}} {{pod}} {{instance}}"
+          "expr": "hikaricp_connections_active{service=~\"$service\"}",
+          "legendFormat": "{{service}} {{pool}} 활성"
+        },
+        {
+          "refId": "B",
+          "expr": "hikaricp_connections_pending{service=~\"$service\"}",
+          "legendFormat": "{{service}} {{pool}} 대기"
         }
       ],
       "fieldConfig": {

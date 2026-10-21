@@ -56,8 +56,13 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "rate(pg_stat_database_xact_commit[2m]) or rate(pg_stat_database_xact_rollback[2m])",
-          "legendFormat": "{{service}} {{uri}} {{result}} {{event_type}} {{datname}} {{pod}} {{instance}}"
+          "expr": "rate(pg_stat_database_xact_commit[2m])",
+          "legendFormat": "{{datname}} 커밋"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(pg_stat_database_xact_rollback[2m])",
+          "legendFormat": "{{datname}} 롤백"
         }
       ],
       "fieldConfig": {
@@ -196,8 +201,13 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "rate(redis_commands_processed_total[2m]) or rate(redis_evicted_keys_total[2m])",
-          "legendFormat": "{{service}} {{uri}} {{result}} {{event_type}} {{datname}} {{pod}} {{instance}}"
+          "expr": "rate(redis_commands_processed_total[2m])",
+          "legendFormat": "명령 {{instance}}"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(redis_evicted_keys_total[2m])",
+          "legendFormat": "축출 {{instance}}"
         }
       ],
       "fieldConfig": {
@@ -224,8 +234,13 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "redis_connected_clients or redis_db_keys",
-          "legendFormat": "{{service}} {{uri}} {{result}} {{event_type}} {{datname}} {{pod}} {{instance}}"
+          "expr": "redis_connected_clients",
+          "legendFormat": "연결 {{instance}}"
+        },
+        {
+          "refId": "B",
+          "expr": "redis_db_keys",
+          "legendFormat": "키 {{db}} {{instance}}"
         }
       ],
       "fieldConfig": {
