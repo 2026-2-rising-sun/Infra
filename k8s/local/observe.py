@@ -37,7 +37,11 @@ def inventory(args):
 
 def tools_manifest(namespace, tools_namespace):
     items = [{"apiVersion": "v1", "kind": "Namespace",
-              "metadata": {"name": tools_namespace}}]
+              "metadata": {"name": tools_namespace}},
+             {"apiVersion": "v1", "kind": "Service",
+              "metadata": {"name": "kafka", "namespace": tools_namespace},
+              "spec": {"type": "ExternalName",
+                       "externalName": f"kafka.{namespace}.svc.cluster.local"}}]
     for name, image, port, env in [
         ("kafka-ui", "kafbat/kafka-ui:v1.5.0", 8080,
          {"KAFKA_CLUSTERS_0_NAME": namespace,
