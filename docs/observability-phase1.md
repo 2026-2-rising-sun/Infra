@@ -174,7 +174,7 @@ Frontend는 [5174](http://127.0.0.1:5174), Grafana는 [13000](http://127.0.0.1:1
 
 최종 Backend 이미지 `bae16ddadb80`에서도 주문 재요청(201→200, 같은 주문번호), 취소(204), 정상 요청 JSON 로그와 Notification 소비 로그를 확인했다. 복구 검증 주문 `OD-20261022-342469`는 `SUCCESS_RESPONSE_LOST` Mock 설정에서 PAYMENT_CONFIRMING이 되었고 `pending{kind="payment"}≥1`이 수집됐다. 관측을 위해 잠시 끈 recovery를 복구하자 PAID가 됐다. 임시 JVM 설정은 모두 원복했다. 이 과정의 Pod 교체 이후에도 Prometheus는 새 Pod를 자동 발견했다.
 
-**Redis는 실제 사용 경로로 검증한다.** 현재 소스의 직접 Redis 호출은 Live 시청자 presence와 Pub/Sub에 있다. 모든 서비스가 상품 캐시를 사용하는 것은 아니다. 방송 87을 프론트에서 열었을 때 화면의 시청자 1명과 Redis `live:viewers:87`의 ZSET 1개·TTL을 교차 확인했다. 영상은 IVS stub이며 실제 송출 검증은 아니다. RedisInsight는 배포·접속 화면까지 확인했고, 최초 약관 동의는 사용자 확인 대상으로 남겨 두었다.
+**Redis는 실제 사용 경로로 검증한다.** 현재 소스의 직접 Redis 호출은 Live 시청자 presence와 Pub/Sub에 있다. 모든 서비스가 상품 캐시를 사용하는 것은 아니다. 방송 87을 프론트에서 열었을 때 화면의 시청자 1명과 Redis `live:viewers:87`의 ZSET 1개·TTL을 교차 확인했다. 영상은 IVS stub이며 실제 송출 검증은 아니다. 사용자 승인으로 약관에 동의한 뒤 RedisInsight에서도 `live:viewers:87`의 타입 SORTED SET, Length 1, TTL 113초를 확인했다. 사용량 전송과 알림은 꺼두었다.
 
 ![구매 업무 결과와 미해결 지표 실제 그래프](assets/observability-phase1/commerce.jpg)
 
@@ -197,9 +197,11 @@ Frontend는 [5174](http://127.0.0.1:5174), Grafana는 [13000](http://127.0.0.1:1
 | 수집기 일시 중단 | Alloy Pod가 0개인 상태를 확인한 뒤 주문 201·취소 204. Alloy 복구 후 해당 묶음 업무 로그 4건이 Loki에서 조회됨. 중단 시간 trace 전량 보존을 보장하는 검증은 아님 |
 | 백업 | PostgreSQL dump를 별도 임시 PostgreSQL 16에 복원해 5개 서비스 DB 확인. 기존 DB·Kafka·Redis Pod 보존 |
 
-검증용 상품 265와 방송 87은 로컬에서 시연할 수 있도록 남겼다. 임시 Kafka 검증 컨테이너는 정리한다. RedisInsight 약관 제출 전 키 탐색 화면 확인은 미완료이며, Redis 데이터 자체와 exporter는 별도로 확인했다.
+검증용 상품 265와 방송 87은 로컬에서 시연할 수 있도록 남겼다. 임시 Kafka 검증 컨테이너는 정리한다. RedisInsight 키 탐색 화면과 실제 Redis 데이터·exporter를 모두 확인했다.
 
 ![같은 eventId의 반영·중복 처리 실제 Loki 로그](assets/observability-phase1/logs.jpg)
+
+![RedisInsight 실제 Live 시청자 ZSET·TTL](assets/observability-phase1/redis.jpg)
 
 ## 팀원은 시나리오별로 다음 실험을 이어간다
 
