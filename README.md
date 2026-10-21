@@ -13,13 +13,13 @@ Infra/
 ├── k8s/             # kustomize base + overlays/{dev,perf,demo}
 ├── terraform/       # AWS 인프라 코드 (골격만)
 ├── argocd/          # GitOps 배포 정의 (골격만, 미적용)
-├── observability/   # Prometheus/Grafana (골격만)
+├── observability/   # 로컬 로그·메트릭·트레이스
 ├── tests/           # e2e / performance (골격만, 툴 미정)
 └── docs/            # 런북, 성능 측정 기록
 ```
 
 각 디렉터리의 README 에 현재 상태와 결정해야 할 항목을 정리해 뒀습니다.
-현재 실제로 동작하는 것은 **`local/` 과 `k8s/`** 이고, 나머지는 자리만 잡아 둔 골격입니다.
+로컬 kind 관측 환경의 설치·지표·시나리오·실행 증거는 [1단계 통합 문서](docs/observability-phase1.md)에 정리했습니다. `terraform/`, `argocd/`, `tests/`는 기존 골격입니다.
 
 ## 시작하기
 

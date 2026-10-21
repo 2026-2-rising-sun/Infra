@@ -1,0 +1,60 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+scrape_configs:
+  - job_name: applications
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [__APP_NAMESPACE__]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: "(member|shopping|commerce|live|notification)(-service)?"
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_container_port_number]
+        regex: '9090'
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_phase]
+        regex: Running
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: "(member|shopping|commerce|live|notification)(-service)?"
+        replacement: $1-service
+        target_label: service
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+    metrics_path: /actuator/prometheus
+  - job_name: infrastructure
+    static_configs:
+      - targets: ['redis-exporter:9121', 'kafka-exporter:9308', 'postgres-exporter:9187', 'kube-state-metrics:8080', 'alloy:12345', 'prometheus:9090']
+  - job_name: kubelet
+    scheme: https
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: node
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+  - job_name: nodes
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [__OBSERVER_NAMESPACE__]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        regex: node-exporter
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_container_port_number]
+        regex: '9100'
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node

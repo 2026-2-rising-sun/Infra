@@ -1,0 +1,84 @@
+logging {
+  level = "info"
+}
+discovery.kubernetes "apps" {
+  role = "pod"
+  namespaces { names = ["__APP_NAMESPACE__"] }
+}
+discovery.relabel "apps" {
+  targets = discovery.kubernetes.apps.targets
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app"]
+    regex = "(member|shopping|commerce|live|notification)(-service)?"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app"]
+    regex = "(member|shopping|commerce|live|notification)(-service)?"
+    replacement = "$1-service"
+    target_label = "service"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label = "namespace"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label = "pod"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label = "container"
+  }
+}
+loki.source.kubernetes "apps" {
+  targets = discovery.relabel.apps.output
+  forward_to = [loki.write.local.receiver]
+}
+loki.write "local" {
+  endpoint { url = "http://loki:3100/loki/api/v1/push" }
+}
+otelcol.receiver.otlp "apps" {
+  http { endpoint = "0.0.0.0:4318" }
+  output { traces = [otelcol.processor.memory_limiter.local.input] }
+}
+otelcol.processor.memory_limiter "local" {
+  check_interval = "1s"
+  limit = "96MiB"
+  output { traces = [otelcol.processor.attributes.privacy.input] }
+}
+otelcol.processor.attributes "privacy" {
+  action {
+    key = "url.query"
+    action = "delete"
+  }
+  action {
+    key = "db.statement"
+    action = "delete"
+  }
+  action {
+    key = "db.query.text"
+    action = "delete"
+  }
+  action {
+    key = "url.full"
+    action = "delete"
+  }
+  action {
+    key = "http.url"
+    action = "delete"
+  }
+  action {
+    key = "http.target"
+    action = "delete"
+  }
+  output { traces = [otelcol.processor.batch.local.input] }
+}
+otelcol.processor.batch "local" {
+  send_batch_size = 128
+  timeout = "2s"
+  output { traces = [otelcol.exporter.otlphttp.tempo.input] }
+}
+otelcol.exporter.otlphttp "tempo" {
+  client { endpoint = "http://tempo:4318" }
+}
