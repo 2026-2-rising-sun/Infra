@@ -8,7 +8,7 @@
 |---|---|---|
 | Infra 1 | [#13](https://github.com/2026-2-rising-sun/Infra/pull/13), 이슈 #11 | 기존 kind 조사·보호 백업, 정확한 서비스 네임스페이스에 Kafka UI·RedisInsight 연결 |
 | Backend 1 | [#305](https://github.com/2026-2-rising-sun/Backend/pull/305), 이슈 #303 | 5개 서비스 공통 HTTP/JVM/DB 풀 메트릭, JSON 완료 로그, 별도 관리 포트 |
-| Infra 2 | 이슈 [#12](https://github.com/2026-2-rising-sun/Infra/issues/12) | Prometheus·Loki·Tempo·Alloy·Grafana, exporter, OTel agent 배포, 이 문서 |
+| Infra 2 | [#14](https://github.com/2026-2-rising-sun/Infra/pull/14), 이슈 #12 | Prometheus·Loki·Tempo·Alloy·Grafana, exporter, OTel agent 배포, 이 문서 |
 | Backend 2 | [#306](https://github.com/2026-2-rising-sun/Backend/pull/306), 이슈 #304 | 주문·결제·환불·Outbox·소비 결과 및 미해결 업무 계측 |
 
 Infra 1 → Backend 1과 Infra 2 → Backend 2 순서로 연결한다. Backend 2 PR은 Backend 1 브랜치를, Infra 2 PR은 Infra 1 브랜치를 기준으로 한다. 하위 PR 병합 후 상위 PR의 기준 브랜치를 각각 dev/main으로 바꾼다. 이번 작업에서는 병합하지 않는다.
@@ -175,6 +175,31 @@ Frontend는 [5174](http://127.0.0.1:5174), Grafana는 [13000](http://127.0.0.1:1
 최종 Backend 이미지 `bae16ddadb80`에서도 주문 재요청(201→200, 같은 주문번호), 취소(204), 정상 요청 JSON 로그와 Notification 소비 로그를 확인했다. 복구 검증 주문 `OD-20261022-342469`는 `SUCCESS_RESPONSE_LOST` Mock 설정에서 PAYMENT_CONFIRMING이 되었고 `pending{kind="payment"}≥1`이 수집됐다. 관측을 위해 잠시 끈 recovery를 복구하자 PAID가 됐다. 임시 JVM 설정은 모두 원복했다. 이 과정의 Pod 교체 이후에도 Prometheus는 새 Pod를 자동 발견했다.
 
 **Redis는 실제 사용 경로로 검증한다.** 현재 소스의 직접 Redis 호출은 Live 시청자 presence와 Pub/Sub에 있다. 모든 서비스가 상품 캐시를 사용하는 것은 아니다. 방송 87을 프론트에서 열었을 때 화면의 시청자 1명과 Redis `live:viewers:87`의 ZSET 1개·TTL을 교차 확인했다. 영상은 IVS stub이며 실제 송출 검증은 아니다. RedisInsight는 배포·접속 화면까지 확인했고, 최초 약관 동의는 사용자 확인 대상으로 남겨 두었다.
+
+![구매 업무 결과와 미해결 지표 실제 그래프](assets/observability-phase1/commerce.jpg)
+
+그래프의 Counter는 Pod 재시작 시 초기화된다. 화면의 누적값 감소를 업무 취소로 읽지 않는다. 다음 성능 비교에는 같은 데이터·측정 구간의 `increase()`와 실행 식별자를 함께 기록한다.
+
+![프론트 접속으로 생성된 Live 시청자 상태](assets/observability-phase1/live-presence.jpg)
+
+### 검증 결과를 구분해서 남긴다
+
+| 검증 | 결과 / 한계 |
+|---|---|
+| Backend #305·#306 GitHub CI | 최종 코드의 Build, unit and integration tests 통과. publish는 PR에서 skipped |
+| 최종 변경 영향 재검사 | common 통합 60, Shopping 통합 98, Notification 통합 56건 실패·스킵 0. 구조화 로그 실제 출력, 커밋/롤백, 멱등·소비 실패/중복 포함 |
+| 외부 Kafka 테스트 | 소유한 임시 Kafka 4 컨테이너에서 SalesInfoEventKafkaTest·CouponSyncKafkaTest 2건 별도 실행 통과 |
+| 전체 harness | 기본 Gradle build·계약 정적 검사 통과. 외부 Kafka 환경변수가 없는 기본 suite의 조건부 2건 skip 때문에 harness 상태는 incomplete. 외부 Kafka 분리 실행과 이벤트 직렬화 표본 25개 검사를 따로 완료했으며 harness 전체 통과로 표기하지 않음 |
+| 테스트 중 실패 기록 | 외부 Kafka를 전체 suite에 한 번에 연결한 시도에서 H2 member_coupon 스키마 관련 실패가 있었음. 기본 suite와 해당 Kafka 2건을 분리한 최종 경로는 통과. 해당 혼합 실행 문제를 이번 변경으로 해결했다고 주장하지 않음 |
+| Kubernetes 설정 | Python 구문·JSON 생성, 서버 dry-run 통과. 같은 설정 재적용 전후 관측 Pod UID 동일. 5개 앱의 새 Pod도 자동 발견하여 up=1 |
+| 브라우저 | 기존 직접 구매 Playwright 1건 통과. 별도 실제 브라우저에서 구매·환불·Live 시청 상태 확인. Frontend 기존 변경은 수정하지 않음 |
+| Kafka 중복 전달 | eventId `1e92126f-e5c5-4296-b25e-322be5cd7482`를 재전달해 Notification의 applied 다음 duplicate_or_no_recipient 로그, 해당 eventId의 DB 알림 1건 확인 |
+| 수집기 일시 중단 | Alloy Pod가 0개인 상태를 확인한 뒤 주문 201·취소 204. Alloy 복구 후 해당 묶음 업무 로그 4건이 Loki에서 조회됨. 중단 시간 trace 전량 보존을 보장하는 검증은 아님 |
+| 백업 | PostgreSQL dump를 별도 임시 PostgreSQL 16에 복원해 5개 서비스 DB 확인. 기존 DB·Kafka·Redis Pod 보존 |
+
+검증용 상품 265와 방송 87은 로컬에서 시연할 수 있도록 남겼다. 임시 Kafka 검증 컨테이너는 정리한다. RedisInsight 약관 제출 전 키 탐색 화면 확인은 미완료이며, Redis 데이터 자체와 exporter는 별도로 확인했다.
+
+![같은 eventId의 반영·중복 처리 실제 Loki 로그](assets/observability-phase1/logs.jpg)
 
 ## 팀원은 시나리오별로 다음 실험을 이어간다
 
