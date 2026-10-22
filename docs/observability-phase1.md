@@ -2,6 +2,26 @@
 
 목표는 **프론트에서 구매 버튼을 누른 뒤 API → DB/Outbox → Kafka → 소비 서비스까지 실제로 확인하고, 이후 부하테스트의 기준점을 만드는 것**이다. 구현 시점은 2026-10-22이며 수치는 단일 개발 환경의 기능 검증 결과다.
 
+**팀원이 처음 설치할 때는 [최초 설치·실행 가이드](../local/team/README.md)의 `make setup` → `make start`를 사용한다.** 아래 기존 환경 수동 적용 절차와 구분한다. 새 전용 클러스터 `shoppinglive-team`과 원격 고정 커밋으로 검증했으며, 기존 Frontend 미커밋 파일은 실행에 필요하지 않다.
+
+### 팀원 최초 설치 검증
+
+Backend `a8c630170e14`, Frontend `21cbf49e677c`를 원격에서 새로 받아 전용 클러스터에 설치했다. Apple Silicon / Docker 8GB에서 기존 kind를 잠시 중지한 상태로 검증했다.
+
+- `make start`: 프론트·API 5개·관리 UI 3개 연결. 검증 시 `PORT_OFFSET=1000` 사용.
+- 프론트 실제 클릭: 로그인 → 상품 1 구매 → 주문 `OD-20261022-629600` → 통합 결제 `PG-37fcfd44-ee83-48a6-a4d3-faee9b52b4f6` 성공 → 환불 1 완료.
+- 방송 1 입장: 화면 시청자 1명, Redis `live:viewers:1` 생성과 양수 TTL 확인.
+- Kafka UI: `commerce.payment-group.v1` 메시지 3개, `commerce.sales-info.v1` 4개, `live.broadcast.v1` 2개 확인.
+- Grafana: Prometheus 대상 13개 모두 up, 서비스 5개의 HTTP 요청 수, Loki의 Commerce 로그, Tempo trace 검색 조회. 백분율 패널은 0~100% 축으로 고정.
+- `make setup` 재실행: 앱·인프라 Pod 8개 UID와 상품·방송 ID 동일.
+- 안전장치 테스트 3개, Python 구문 검사, JSON 생성, kustomize overlay 4개 렌더링 통과.
+
+새 RedisInsight는 초기 약관 화면까지 확인했다. 이후 Browser 조작은 사용자 동의 후 진행한다. 실제 PG·IVS·배포·부하테스트·Windows/Linux 최초 설치는 검증하지 않았다. API·이벤트 계약 변경은 없다.
+
+![새 환경의 프론트 Mock 통합 결제 완료](assets/observability-phase1/team-onboarding-payment.png)
+
+![새 환경의 Grafana 전체 현황](assets/observability-phase1/team-onboarding-grafana.png)
+
 ## 결과물과 적용 순서
 
 | 작업 | 결과물 | 핵심 범위 |
