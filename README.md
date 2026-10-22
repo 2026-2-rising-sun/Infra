@@ -21,6 +21,8 @@ Infra/
 각 디렉터리의 README 에 현재 상태와 결정해야 할 항목을 정리해 뒀습니다.
 로컬 kind 관측 환경의 설치·지표·시나리오·실행 증거는 [1단계 통합 문서](docs/observability-phase1.md)에 정리했습니다. `terraform/`, `argocd/`, `tests/`는 기존 골격입니다.
 
+관측 스택 설치 후 Infra 폴더에서 `make ui`를 실행하면 Grafana(13000), Kafka UI(18080), RedisInsight(15540)에 한 번에 연결합니다. 터미널을 유지하고 Ctrl+C로 연결만 종료합니다. kind와 서비스는 종료하지 않습니다.
+
 ## 시작하기
 
 ```sh

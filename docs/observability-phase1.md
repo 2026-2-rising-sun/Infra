@@ -131,15 +131,23 @@ JAVA_HOME=/path/to/jdk21 python3 observability/local/instrument.py \
 - OTel Java agent 2.20.0을 공식 GitHub 배포에서 내려받아 고정 SHA256을 검증한다. HTTP·JDBC·log MDC만 선택적으로 켠다. agent 자체 OTLP 로그·메트릭 export는 꺼서 중복 수집하지 않는다.
 - `kubectl`로 변경한 임시 설정은 명시적으로 원복한다. 앱 원복은 보호 백업의 Deployment spec을 검토해 적용하며, DB migration은 이미지 원복만으로 되돌아가지 않는다.
 
-서로 다른 터미널에서 필요한 화면만 연다. 모두 localhost에만 노출한다.
+관측 스택이 설치되어 있으면 Infra 폴더에서 한 번에 UI를 연결한다. 이 터미널은 계속 열어둔다.
 
 ```sh
-kubectl --context kind-shoppinglive-dev -n shoppinglive-observability port-forward svc/grafana 13000:3000
-kubectl --context kind-shoppinglive-dev -n shoppinglive-observability port-forward svc/prometheus 19090:9090
-kubectl --context kind-shoppinglive-dev -n shoppinglive-observability port-forward svc/kafka-ui 18080:8080
-kubectl --context kind-shoppinglive-dev -n shoppinglive-observability port-forward svc/redisinsight 15540:5540
+make ui
+```
 
-# Frontend 레포에서 기존 실행 경로 사용
+Grafana(13000), Kafka UI(18080), RedisInsight(15540)의 접속 주소를 출력한다. Ctrl+C는 이번 실행의 연결만 종료하며 kind·서비스·DB는 유지한다. 이미 사용 중인 포트가 있으면 안내 후 종료하며 기존 프로세스를 끊지 않는다. `make`가 없으면 `python3 observability/local/ui.py`로 같은 기능을 실행할 수 있다.
+
+Prometheus 원본 화면이 필요할 때만 별도 터미널에서 추가한다.
+
+```sh
+kubectl --context kind-shoppinglive-dev -n shoppinglive-observability port-forward svc/prometheus 19090:9090
+```
+
+Frontend 레포에서는 별도 터미널로 기존 실행 경로를 사용한다.
+
+```sh
 KIND_NAMESPACE=shoppinglive-fe-dev-integration node scripts/local-frontend.mjs
 ```
 
