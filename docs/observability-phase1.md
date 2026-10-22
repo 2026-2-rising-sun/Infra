@@ -31,7 +31,7 @@ Backend `a8c630170e14`, Frontend `21cbf49e677c`를 원격에서 새로 받아 �
 | Infra 2 | [#14](https://github.com/2026-2-rising-sun/Infra/pull/14), 이슈 #12 | Prometheus·Loki·Tempo·Alloy·Grafana, exporter, OTel agent 배포, 이 문서 |
 | Backend 2 | [#306](https://github.com/2026-2-rising-sun/Backend/pull/306), 이슈 #304 | 주문·결제·환불·Outbox·소비 결과 및 미해결 업무 계측 |
 
-Infra 1 → Backend 1과 Infra 2 → Backend 2 순서로 연결한다. Backend 2 PR은 Backend 1 브랜치를, Infra 2 PR은 Infra 1 브랜치를 기준으로 한다. 하위 PR 병합 후 상위 PR의 기준 브랜치를 각각 dev/main으로 바꾼다. 이번 작업에서는 병합하지 않는다.
+Infra 1 → Backend 1과 Infra 2 → Backend 2 순서로 연결한다. Backend 2는 Backend 1, Infra 2는 Infra 1에 의존한다. 최종 통합 대상은 Backend `dev`, Infra `main`이며 팀원 실행은 Infra `main`의 최초 설치 가이드를 따른다.
 
 프론트는 기존 Vite를 호스트에서 실행한다. 프론트 배포 코드는 옮기지 않는다. 실제 배포, k6/nGrinder, 용량 산정, 신규 캐시·대기열, 분산 비동기 추적은 다음 단계다.
 

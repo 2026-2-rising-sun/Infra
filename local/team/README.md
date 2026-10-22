@@ -19,10 +19,10 @@ Docker에는 단일 클러스터 기준 메모리 8GB 이상을 할당합니다.
 
 ## 2. 코드를 받고 설치하기
 
-아직 머지하지 않은 PR의 브랜치이므로 아래 브랜치를 받습니다. 기존 Infra 작업 폴더가 있으면 새 폴더에서 실행하세요.
+Infra의 `main` 브랜치를 받습니다. 기존 Infra 작업 폴더가 있으면 새 폴더에서 실행하세요.
 
 ```bash
-git clone --branch 'feat/#12-local-observability' https://github.com/2026-2-rising-sun/Infra.git ShoppingLive-Infra
+git clone --branch main https://github.com/2026-2-rising-sun/Infra.git ShoppingLive-Infra
 cd ShoppingLive-Infra
 make setup
 ```
