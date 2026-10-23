@@ -14,6 +14,7 @@ k8s/
 │   │   ├── kustomization.yaml    # services + datatier 를 묶는다
 │   │   ├── services/             # base + namePrefix(dev-) + replica/리소스/프로필 patch
 │   │   ├── datatier/             # dev 전용 Postgres/Redis/Kafka
+│   │   ├── scaling/              # KEDA ScaledObject (서비스별 파드 수 상·하한과 스케일링 신호)
 │   │   └── tools/                # Kafka UI, Redis Insight (수동 적용, ArgoCD 동기화 대상 아님)
 │   └── {perf,demo}/kustomization.yaml
 └── local/                        # 로컬 kind 클러스터 전용 (Dashboard 계정, port-forward 스크립트)
@@ -55,8 +56,8 @@ Service·HTTPRoute에는 8080만 연결한다. 필수 JWKS·개인키·호출 �
 
 | overlay | namespace | prefix | replicas | 성격 |
 |---|---|---|---|---|
-| `dev` | `shoppinglive-dev` | `dev-` | 1 | 기능 확인용 최소 구성 |
-| `perf` | `shoppinglive-perf` | `perf-` | 2 | 부하 테스트, 추후 HPA 부착 |
+| `dev` | `shoppinglive-dev` | `dev-` | KEDA 가 정함 (`scaling/`) | 기능 확인용 최소 구성. 매니페스트에 replicas 를 두지 않는다 |
+| `perf` | `shoppinglive-perf` | `perf-` | 2 | 부하 테스트. 측정 뒤 dev 의 `scaling/` 을 본떠 임계값을 정한다 |
 | `demo` | `shoppinglive-demo` | `demo-` | 2 | 시연용 고정 |
 
 ## dev 의 미들웨어 (`overlays/dev/datatier/`)
