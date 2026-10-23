@@ -1,0 +1,63 @@
+# 로컬 kind 전용: 서비스 JVM 에 OTel javaagent 를 붙여 trace 를 관측 스택(observability/local)의 Alloy 로 보낸다.
+# 이미지는 platform/kind/build-images.sh 가 /otel/agent.jar 를 넣어 만든 `:local` 태그다(kustomization.yaml images:).
+# 에이전트가 없는 이미지(예: CI 가 올릴 :latest)에 이 패치를 그대로 쓰면 JVM 이 "-javaagent 파일 없음" 으로 뜨지 못한다.
+# 그래서 images: 와 이 패치는 한 쌍이다. CI 이미지로 바꿀 때 둘을 함께 걷어내거나, CI 이미지에도 에이전트를 넣는다.
+# 값은 observability/local/instrument.py(팀 체험 환경)와 같다. 지표는 Prometheus 가 9090 을 직접 긁으므로 OTel 로는 trace 만 보낸다.
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: JAVA_TOOL_OPTIONS, value: "-javaagent:/otel/agent.jar" }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OBSERVABILITY_ENVIRONMENT, value: kind-local }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_TRACES_EXPORTER, value: otlp }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_METRICS_EXPORTER, value: none }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_LOGS_EXPORTER, value: none }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: http://alloy.shoppinglive-observability.svc.cluster.local:4318 }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_EXPORTER_OTLP_PROTOCOL, value: http/protobuf }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_TRACES_SAMPLER, value: parentbased_traceidratio }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_TRACES_SAMPLER_ARG, value: "1.0" }
+# 자동 계측은 꺼 두고 필요한 것만 켠다(에이전트가 모든 라이브러리를 건드리면 기동이 느려진다).
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED, value: "false" }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_INSTRUMENTATION_SERVLET_ENABLED, value: "true" }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_INSTRUMENTATION_SPRING_WEB_ENABLED, value: "true" }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED, value: "true" }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_INSTRUMENTATION_JDBC_ENABLED, value: "true" }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_INSTRUMENTATION_JDBC_DATASOURCE_ENABLED, value: "true" }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_INSTRUMENTATION_JAVA_HTTP_CLIENT_ENABLED, value: "true" }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_INSTRUMENTATION_HTTP_URL_CONNECTION_ENABLED, value: "true" }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_INSTRUMENTATION_APACHE_HTTPCLIENT_ENABLED, value: "true" }
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: { name: OTEL_INSTRUMENTATION_LOGBACK_MDC_ENABLED, value: "true" }

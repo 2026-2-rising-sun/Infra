@@ -7,6 +7,21 @@ namePrefix: dev-
 resources:
   - ../../../base
 
+# 서비스 이미지. CI 가 아직 GHCR 에 이미지를 올리지 않아 base 의 :latest 는 받을 수 없다.
+# 로컬에서는 platform/kind/build-images.sh 가 Backend 를 빌드해 :local 로 kind 에 적재하고, 여기서 그 태그를 쓴다.
+# (imagePullPolicy IfNotPresent 라 적재된 이미지를 그대로 쓴다.) CI 가 올리기 시작하면 커밋 SHA 태그로 바꾼다.
+images:
+  - name: ghcr.io/2026-2-rising-sun/member-service
+    newTag: local
+  - name: ghcr.io/2026-2-rising-sun/shopping-service
+    newTag: local
+  - name: ghcr.io/2026-2-rising-sun/commerce-service
+    newTag: local
+  - name: ghcr.io/2026-2-rising-sun/live-service
+    newTag: local
+  - name: ghcr.io/2026-2-rising-sun/notification-service
+    newTag: local
+
 # 컨테이너 이름이 서비스마다 달라 strategic merge 로는 한 번에 못 고친다.
 # 모든 Deployment 가 컨테이너 1개짜리 같은 모양이므로 인덱스 0 을 대상으로 한다.
 patches:
@@ -28,6 +43,10 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/0/value
         value: dev,observability
+  # trace 전송용 OTel 에이전트 env. :local 이미지와 한 쌍이다(파일 머리 주석 참고).
+  - target:
+      kind: Deployment
+    path: otel-agent-env.yaml
   - target:
       kind: ConfigMap
       name: member-session-policy
