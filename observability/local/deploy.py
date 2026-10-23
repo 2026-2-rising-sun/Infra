@@ -91,7 +91,7 @@ def manifest(args, kubelets=(), ca_bundle=""):
     dashboards = {str(p.name):'/var/lib/grafana/dashboards/'+p.name for p in ROOT.glob('dashboard-*.json')}
     workload('grafana','grafana/grafana:12.1.1',[3000],configs={'datasources.yml':'/etc/grafana/provisioning/datasources/local.yml','dashboards.yml':'/etc/grafana/provisioning/dashboards/local.yml',**dashboards},env=grafana_env,storage=True,memory='256Mi')
     workload('redis-exporter','oliver006/redis_exporter:v1.77.0',[9121],[f'--redis.addr=redis://redis.{args.app_namespace}.svc.cluster.local:6379'],memory='64Mi')
-    workload('kafka-exporter','danielqsj/kafka-exporter:v1.9.0',[9308],[f'--kafka.server=kafka.{args.app_namespace}.svc.cluster.local:9092','--kafka.version=3.9.0','--topic.filter=.*','--group.filter=.*'],memory='96Mi')
+    workload('kafka-exporter','danielqsj/kafka-exporter:v1.9.0',[9308],[f'--kafka.server={args.kafka_service}.{args.app_namespace}.svc.cluster.local:9092','--kafka.version=3.9.0','--topic.filter=.*','--group.filter=.*'],memory='96Mi')
     workload('postgres-exporter','quay.io/prometheuscommunity/postgres-exporter:v0.17.1',[9187],['--extend.query-path=/etc/postgres/queries.yml'], {'postgres-queries.yml':'/etc/postgres/queries.yml'},env=[dict(name='DATA_SOURCE_NAME',valueFrom={'secretKeyRef':{'name':'postgres-exporter','key':'dsn'}})],memory='64Mi')
     workload('kube-state-metrics','registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.17.0',[8080],['--resources=pods,deployments,replicasets,statefulsets,daemonsets,nodes,horizontalpodautoscalers',f'--namespaces={args.app_namespace},{ns}'],memory='96Mi')
     workload('node-exporter','prom/node-exporter:v1.9.1',[9100],['--path.rootfs=/host','--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)'],memory='64Mi',extra={'hostPID':True,'volumes':[{'name':'host','hostPath':{'path':'/'}}]})
@@ -118,9 +118,12 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--context',default='kind-shoppinglive-dev')
     parser.add_argument('--app-namespace',default='shoppinglive-fe-dev-integration')
+    parser.add_argument('--kafka-service', help='Kafka bootstrap Service 이름 (dev: kafka-kafka-bootstrap, 그 외: kafka)')
     parser.add_argument('--namespace',default='shoppinglive-observability')
     parser.add_argument('--apply',action='store_true')
     args=parser.parse_args()
+    args.kafka_service = args.kafka_service or (
+        "kafka-kafka-bootstrap" if args.app_namespace == "shoppinglive-dev" else "kafka")
     if not args.context.startswith('kind-') or args.app_namespace==args.namespace:
         parser.error('kind 컨텍스트와 별도 관측 네임스페이스가 필요합니다')
     if not args.apply:
