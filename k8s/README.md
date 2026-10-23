@@ -40,7 +40,7 @@ Frontend 는 이 Ingress 엔드포인트 하나만 호출한다.
 
 컨테이너 포트는 5개 서비스 모두 **8080** 으로 통일한다.
 서비스별 포트(member 8081 … notification 8085)는 **로컬에서 5개를 한 호스트에 동시에 띄울 때만** 쓴다.
-Member·Shopping·Commerce·Live의 health probe는 별도 관리 포트 **9090**을 사용한다.
+5개 서비스의 health probe와 Prometheus 수집은 별도 관리 포트 **9090**을 사용한다.
 Service·Ingress에는 8080만 연결한다. 필수 JWKS·개인키·호출 토큰·TTL 입력은 [P2 Infra 가이드](https://app.notion.com/p/3ec226545d15811087c4c552be01e341)를 따른다.
 
 ## 환경별 차이
@@ -105,10 +105,11 @@ kubectl -n kubernetes-dashboard create token admin-user --duration=24h   # 로�
 미들웨어를 먼저 올리고 준비된 뒤 서비스를 올린다. 한 번에 올리면 서비스가 Postgres 보다 먼저 떠서
 `Connection refused` 로 몇 번 재시작하고, 재시작 대기 시간(CrashLoopBackOff)이 점점 길어진다.
 P2 이미지를 적용하기 전에는 [필수 보안 리소스](https://app.notion.com/p/3ec226545d15811087c4c552be01e341)를 같은 namespace에 먼저 공급해야 한다.
-아래 절차만으로 인증 키·TTL 정책이나 외부 공개 환경이 준비되지는 않는다.
+kind에서는 `k8s/local/auth-secrets.sh`가 JWT 키·JWKS·kid와 서비스 간 토큰 8개를 만든다(이미 있으면 건너뜀). 운영 환경 키를 만드는 용도는 아니다.
 
 ```sh
 NS=shoppinglive-dev
+sh k8s/local/auth-secrets.sh $NS                       # 인증 키·서비스 토큰 (최초 1회)
 kubectl apply -k k8s/overlays/dev                      # 전체 적용 (네임스페이스 포함)
 for d in postgres redis kafka; do kubectl rollout status deploy/$d -n $NS --timeout=10m; done
 
@@ -134,7 +135,7 @@ kubectl proxy                            # 대시보드용, 다른 터미널에�
 
 | 대상 | 주소 |
 |---|---|
-| 서비스 API | http://localhost:9081 (member) … 9085 (notification); Member~Live health는 별도 9090 probe |
+| 서비스 API | http://localhost:9081 (member) … 9085 (notification); health·prometheus는 별도 9090 |
 | Kubernetes Dashboard | http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/ |
 | Kafka UI | http://localhost:28080 |
 | Redis Insight | http://localhost:25540 (처음 한 번 Host `redis`, Port `6379` 로 등록) |
