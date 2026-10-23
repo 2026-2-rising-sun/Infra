@@ -37,9 +37,11 @@ patches:
           requests:
             cpu: 50m
             memory: 256Mi
+          # CPU 상한 500m 은 JVM 기동을 수 분으로 늘려 probe 에 걸린다(노트북 첫 실행에서 확인). 기동 중에만 많이 쓰고
+          # 평시엔 요청값 근처라 상한을 넉넉히 둔다. 메모리는 OTel 에이전트 몫(약 100Mi)을 더해 768Mi.
           limits:
-            cpu: 500m
-            memory: 512Mi
+            cpu: "2"
+            memory: 768Mi
       - op: replace
         path: /spec/template/spec/containers/0/env/0/value
         value: dev,observability

@@ -62,17 +62,24 @@ spec:
             - name: member-jwt-public
               mountPath: /run/shoppinglive/jwt
               readOnly: true
+          # startupProbe 가 성공할 때까지 liveness 는 돌지 않는다. JVM 기동은 노트북(kind, CPU 제한)에서
+          # 2~3분, OTel 에이전트까지 붙으면 더 걸려서 liveness(30초 + 20초×3)만으로는 기동 중에 죽인다.
+          # 10초 × 60회 = 최대 10분까지 기다린다. 기동이 끝난 뒤의 장애 감지는 liveness 가 그대로 맡는다.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 10
+            failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
               port: management
-            initialDelaySeconds: 15
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
               port: management
-            initialDelaySeconds: 30
             periodSeconds: 20
           resources:
             requests:
