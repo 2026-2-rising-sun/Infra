@@ -25,3 +25,11 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+
+  # dev 의 파드 수는 KEDA(HPA)가 정한다. 매니페스트에는 replicas 가 없지만, 혹시 남아 있거나
+  # 다른 경로로 들어와도 selfHeal 이 파드 수를 되돌리지 않도록 차이 비교에서 뺀다.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
