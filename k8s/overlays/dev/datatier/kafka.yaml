@@ -1,9 +1,83 @@
-# dev 전용 Kafka 단일 브로커. local/docker-compose.yml 의 kafka 서비스를 k8s 로 옮긴 것이다.
+# dev 전용 Kafka. Strimzi 오퍼레이터가 아래 CR 을 읽어 브로커 파드·Service·토픽을 만든다.
 #
-# 공식 Apache 이미지이고 4.x 는 KRaft 전용이라 Zookeeper 가 없다. 한 프로세스가 컨트롤러와 브로커를 겸한다.
-# local 과 마찬가지로 로그 디렉터리를 보존하지 않는다(emptyDir). pod 가 다시 뜨면 토픽/메시지가
-# 사라지지만 auto-create 로 다시 생기므로 dev 에서는 문제되지 않는다.
-# 클러스터 안에서만 접속하므로 local 에 있던 EXTERNAL 리스너는 뺐다.
+# 왜 Deployment 하나에서 Strimzi 로 바꿨나
+#   - 브로커 수·토픽·파티션을 YAML 로 선언하고 오퍼레이터가 맞춰 준다. 부하 테스트에서 파티션을 6 → 12 로
+#     바꾸는 식의 실험을 kubectl apply 한 번으로 할 수 있다.
+#   - 같은 CR 을 AWS 에서도 쓴다(브로커 3, 복제 3 만 overlay 로 바꾼다). 로컬과 운영 구성이 같은 YAML 이다.
+#   - Kafka Exporter(컨슈머 랙 지표)를 CR 한 줄로 켠다.
+# 전제: 클러스터에 Strimzi CRD·오퍼레이터가 있어야 한다 (platform/kind/components/30-strimzi.sh).
+#
+# KRaft 전용이라 Zookeeper 가 없다. Strimzi 1.x 는 노드 풀(KafkaNodePool)이 필수라 브로커 설정은
+# 아래 KafkaNodePool 에 있고, Kafka CR 에는 클러스터 공통 설정만 둔다.
+# 로그 디렉터리는 이전과 같이 보존하지 않는다(ephemeral). 파드가 다시 뜨면 메시지가 사라지지만
+# 토픽은 KafkaTopic CR 이 다시 만들므로 dev 에서는 문제되지 않는다.
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: kafka
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  kafka:
+    # version 을 비워 두면 오퍼레이터가 지원하는 기본(최신) Kafka 를 쓴다. 오퍼레이터를 올릴 때 같이 올라간다.
+    listeners:
+      # 클러스터 안에서만 접속한다. 인증·TLS 는 1단계에서 두지 않는다 (VPC 내부, 후속 과제).
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+    config:
+      # 단일 브로커라 복제본을 1 로 낮춰야 내부 토픽이 생성된다. AWS overlay 에서 3/2 로 올린다.
+      offsets.topic.replication.factor: 1
+      transaction.state.log.replication.factor: 1
+      transaction.state.log.min.isr: 1
+      default.replication.factor: 1
+      min.insync.replicas: 1
+      # 소비 실패 시 Backend 가 <토픽>.notification.dlt 같은 DLT 토픽을 그때 만든다.
+      # 선언한 토픽 4개 외의 토픽은 자동 생성에 맡긴다.
+      auto.create.topics.enable: true
+      group.initial.rebalance.delay.ms: 0
+    jvmOptions:
+      -Xms: 256m
+      -Xmx: 512m
+  entityOperator:
+    # KafkaTopic CR 을 실제 토픽으로 맞춘다. KafkaUser 는 안 쓰므로 userOperator 는 켜지 않는다.
+    topicOperator: {}
+  kafkaExporter:
+    # 컨슈머 그룹별 랙을 Prometheus 지표로 낸다 (파드 kafka-kafka-exporter, 포트 9404).
+    # KEDA 의 kafka 트리거는 브로커에서 직접 랙을 읽으므로 이 exporter 는 대시보드·알림용이다.
+    topicRegex: ".*"
+    groupRegex: ".*"
+---
+# 컨트롤러와 브로커를 한 파드가 겸한다. dev 는 1개.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: dual
+  labels:
+    strimzi.io/cluster: kafka
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  replicas: 1
+  roles:
+    - controller
+    - broker
+  storage:
+    type: ephemeral
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+---
+# 이전 Deployment 시절의 Service 이름(kafka:9092)을 그대로 쓰는 곳이 남아 있다:
+# Backend dev 프로필 기본값, Kafka UI(tools), 관측 스택의 kafka-exporter·observe.py.
+# Strimzi 의 부트스트랩 Service 는 kafka-kafka-bootstrap 이라 이름이 다르다.
+# 그 호출처를 모두 고치는 대신 같은 브로커 파드를 가리키는 별칭 Service 를 하나 둔다.
+# 부트스트랩 뒤의 접속은 브로커가 광고한 주소(kafka-dual-0.kafka-kafka-brokers...)로 가므로 동작은 같다.
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,101 +88,9 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: kafka
+    strimzi.io/cluster: kafka
+    strimzi.io/broker-role: "true"
   ports:
     - name: kafka
       port: 9092
-      targetPort: kafka
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kafka
-  labels:
-    app.kubernetes.io/name: kafka
-    app.kubernetes.io/part-of: shoppinglive
-spec:
-  replicas: 1
-  # 단일 브로커라 롤링 중 두 개가 겹치면 컨트롤러 쿼럼이 깨진다.
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: kafka
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: kafka
-        app.kubernetes.io/part-of: shoppinglive
-    spec:
-      securityContext:
-        # apache/kafka 이미지는 uid 1000(appuser)으로 돌아서 emptyDir 에 쓰려면 그룹을 맞춰야 한다.
-        fsGroup: 1000
-      containers:
-        - name: kafka
-          image: apache/kafka:4.0.0
-          imagePullPolicy: IfNotPresent
-          ports:
-            - name: kafka
-              containerPort: 9092
-            - name: controller
-              containerPort: 9093
-          env:
-            - name: KAFKA_NODE_ID
-              value: "1"
-            - name: KAFKA_PROCESS_ROLES
-              value: "broker,controller"
-            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-              value: "1@localhost:9093"
-            - name: KAFKA_LISTENERS
-              value: "PLAINTEXT://:9092,CONTROLLER://:9093"
-            # 같은 네임스페이스의 파드는 Service 이름만으로 붙는다.
-            - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka:9092"
-            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
-            - name: KAFKA_CONTROLLER_LISTENER_NAMES
-              value: "CONTROLLER"
-            - name: KAFKA_INTER_BROKER_LISTENER_NAME
-              value: "PLAINTEXT"
-            # 단일 브로커라 복제본을 1로 낮춰야 내부 토픽이 생성된다.
-            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-              value: "1"
-            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
-              value: "1"
-            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
-              value: "1"
-            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
-              value: "0"
-            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
-              value: "true"
-            - name: KAFKA_LOG_DIRS
-              value: /var/lib/kafka/data
-          volumeMounts:
-            - name: data
-              mountPath: /var/lib/kafka/data
-          # local 의 healthcheck 는 kafka-topics.sh 를 썼지만 여기서는 쓸 수 없다.
-          # advertised listener 가 Service 이름(kafka)이라 CLI 가 부트스트랩 후 ClusterIP 로 다시 붙는데,
-          # 그 Service 의 엔드포인트는 이 파드가 Ready 여야 생긴다 — 프로브가 자기 자신을 기다리는 교착이 된다.
-          # 리스너가 연결을 받기 시작했는지만 보면 충분하고, 프로브마다 JVM 을 띄우지 않아도 된다.
-          readinessProbe:
-            tcpSocket:
-              port: kafka
-            initialDelaySeconds: 15
-            periodSeconds: 10
-            failureThreshold: 10
-          livenessProbe:
-            tcpSocket:
-              port: kafka
-            initialDelaySeconds: 60
-            periodSeconds: 20
-          resources:
-            requests:
-              cpu: 100m
-              memory: 512Mi
-            limits:
-              cpu: "1"
-              memory: 1Gi
-      volumes:
-        - name: data
-          emptyDir: {}
+      targetPort: 9092
