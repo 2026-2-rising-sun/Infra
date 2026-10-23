@@ -79,6 +79,11 @@ spec:
                 secretKeyRef:
                   name: live-member-service-token
                   key: token
+            - name: NOTIFICATION_MEMBER_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: notification-member-service-token
+                  key: token
           volumeMounts:
             - name: member-jwt-public
               mountPath: /run/shoppinglive/jwt
