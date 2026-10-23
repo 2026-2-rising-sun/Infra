@@ -1,0 +1,38 @@
+# 클러스터 범위 리소스라 k8s/base 가 아니라 플랫폼 설치 단계에서 만든다.
+# k8s/base/gateway/gateway.yaml 의 gatewayClassName 이 이 이름을 가리킨다.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy-gateway
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: kind-nodeport
+    namespace: envoy-gateway-system
+---
+# kind 에는 LoadBalancer 가 없어서 Envoy 의 Service 를 NodePort 로 만든다.
+# kind-config.yaml 이 노드의 30080 을 호스트 9080 에 연결하므로 http://localhost:9080/api/... 로 들어간다.
+# 주의: 이 클래스로 Gateway 를 두 개 만들면 둘 다 30080 을 요구해 두 번째는 실패한다.
+#       perf/demo 처럼 Gateway 를 더 두려면 EnvoyProxy 를 하나 더 만들어 Gateway 의 infrastructure.parametersRef 로 연결한다.
+# AWS 에서는 이 파일 대신 NLB 주석을 가진 EnvoyProxy 를 쓴다 (terraform/argocd 단계).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: kind-nodeport
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: NodePort
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              ports:
+                - port: 80
+                  protocol: TCP
+                  nodePort: 30080
