@@ -1,0 +1,80 @@
+# 요청-응답형 HTTP 서비스는 CPU 로 늘린다.
+#
+# member: 로그인·세션 확인. 모든 인증 요청이 거치고 비밀번호 해시 계산이 CPU 집약적이다.
+#         다른 서비스가 매 요청마다 member 에 세션을 물어보므로 member 가 죽으면 전부 멈춘다.
+#         그래서 최소 2 로 둔다 (단일 장애점 완화. 성능 때문이 아니다).
+# commerce: 주문·결제·쿠폰 드롭. 선착순 드롭은 짧은 CPU 스파이크다. DB 대기가 길어지면
+#         CPU 가 안 오를 수 있어서, 부하 테스트 뒤 p99 지연 트리거(prometheus) 추가를 검토한다.
+#
+# cpu 트리거는 HPA 의 resource 지표를 그대로 쓴다(KEDA 가 중간에서 변환하지 않는다).
+# Utilization 70 은 "requests 대비 70%" 다. dev 의 requests 는 50m 라 쉽게 넘는다 — 기능 확인용
+# 값이고, 실제 임계값은 perf overlay 의 requests(250m) 기준으로 측정해 정한다.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: member-service
+  labels:
+    app.kubernetes.io/name: member-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  scaleTargetRef:
+    name: dev-member-service
+  minReplicaCount: 2
+  maxReplicaCount: 6
+  pollingInterval: 15
+  cooldownPeriod: 300
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  triggers:
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: commerce-service
+  labels:
+    app.kubernetes.io/name: commerce-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  scaleTargetRef:
+    name: dev-commerce-service
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  pollingInterval: 15
+  cooldownPeriod: 300
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 4
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  triggers:
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"
