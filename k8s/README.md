@@ -94,9 +94,11 @@ kubectl kustomize k8s/overlays/dev
 ## 로컬 kind 클러스터에서 dev 띄우기
 
 공유 dev 환경에 올리기 전에 서비스 5개와 미들웨어를 한 번에 띄워 보는 절차다.
-서비스 이미지는 Backend CI 가 GHCR 에 올린 `:latest` 를 받는다(amd64/arm64 멀티아키텍처).
+서비스 이미지는 아직 CI 가 올리지 않으므로 Backend 레포를 옆에 받아 로컬에서 만든다(1-2 단계).
 
-**준비물**: Docker Desktop, `kubectl`, `kind`, `helm` (`brew install kind helm`)
+**준비물**: Docker Desktop, `kubectl`, `kind`, `helm` (`brew install kind helm`), Backend 레포 클론(기본 위치 Infra 옆 `../Backend`)
+
+순서 요약: 클러스터 → 플랫폼(install.sh) → 이미지(build-images.sh) → 인증 키 → `apply -k` → 관측 스택(deploy.py) → 접속.
 
 ### 1. 클러스터와 대시보드
 
@@ -114,6 +116,14 @@ kubectl -n kubernetes-dashboard create token admin-user --duration=24h   # 로�
 
 ```sh
 ./platform/kind/install.sh               # KUBE_CONTEXT 기본값 kind-shoppinglive-dev
+```
+
+### 1-2. 서비스 이미지
+
+Backend 를 Dockerfile 로 빌드해 `:local` 태그로 kind 에 넣는다. `overlays/dev` 가 이 태그를 쓴다([platform/kind/README.md](../platform/kind/README.md) "서비스 이미지").
+
+```sh
+./platform/kind/build-images.sh          # BACKEND_DIR=<경로> 로 위치 지정, 서비스 이름을 인자로 주면 일부만
 ```
 
 ### 2. 배포
@@ -141,6 +151,16 @@ done
 kubectl get pods -n $NS                                # 전부 1/1 Running 이면 정상
 
 kubectl apply -k k8s/overlays/dev/tools                # 선택: Kafka UI, Redis Insight
+```
+
+### 2-1. 관측 스택 (Prometheus, Loki, Tempo, Grafana, Alertmanager)
+
+`observability/local/deploy.py` 는 기본값이 팀 체험 환경(`shoppinglive-fe-dev-integration`)이라 이 절차에서는 네임스페이스를 지정한다.
+서비스 파드는 `app` 라벨로 골라 9090 의 `/actuator/prometheus` 를 긁고, trace 는 1-2 에서 넣은 OTel 에이전트가 Alloy 로 보낸다.
+
+```sh
+python3 observability/local/deploy.py --app-namespace $NS --apply                  # Slack 알림까지 켜려면 SLACK_WEBHOOK_URL=... 를 앞에 붙인다
+kubectl -n shoppinglive-observability port-forward svc/grafana 13000:3000          # http://localhost:13000 (익명 Viewer)
 ```
 
 ### 3. 접속
@@ -175,5 +195,6 @@ kind delete cluster --name shoppinglive-dev   # 클러스터째 삭제
 
 ## 이미지 태그
 
-지금은 `ghcr.io/2026-2-rising-sun/<service>:latest` placeholder다.
-Backend CI 가 이미지를 푸시하기 시작하면 커밋 SHA 기반 고정 태그로 바꾼다 (`argocd/README.md` 참고).
+base 는 `ghcr.io/2026-2-rising-sun/<service>-service:latest` placeholder 고, `overlays/dev` 는 `images:` 로 `:local`(build-images.sh 가 적재) 을 쓴다.
+`:local` 이미지에는 OTel 에이전트가 들어 있고 dev overlay 의 `otel-agent-env.yaml` 이 그걸 전제한다. 둘은 한 쌍이다.
+Backend CI 가 이미지를 푸시하기 시작하면 커밋 SHA 기반 고정 태그로 바꾸고, 그 이미지에도 에이전트를 넣거나 패치를 걷어낸다 (`argocd/README.md` 참고).
