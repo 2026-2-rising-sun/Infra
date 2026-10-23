@@ -1,0 +1,28 @@
+# Argo CD Helm values. 외부에 열지 않고 port-forward 로만 접근한다(make argocd-ui).
+# 모든 컴포넌트는 시스템 노드에 둔다. Karpenter 노드가 합쳐질 때 ArgoCD 가 흔들리지 않게.
+global:
+  nodeSelector:
+    shoppinglive.io/node-role: system
+configs:
+  params:
+    # TLS 는 port-forward 구간에 필요 없다. 외부 노출 시 다시 켠다.
+    server.insecure: true
+  cm:
+    # 리소스 상태를 Kustomize·Helm 구분 없이 같은 방식으로 비교한다.
+    application.resourceTrackingMethod: annotation
+redis-ha:
+  enabled: false
+controller:
+  replicas: 1
+server:
+  replicas: 1
+  service:
+    type: ClusterIP
+repoServer:
+  replicas: 1
+applicationSet:
+  replicas: 1
+dex:
+  enabled: false # GitHub 로그인은 후속 과제. 지금은 admin 비밀번호
+notifications:
+  enabled: false
