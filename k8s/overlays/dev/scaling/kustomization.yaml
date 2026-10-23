@@ -19,3 +19,4 @@ namePrefix: dev-
 resources:
   - kafka-consumers.yaml
   - live.yaml
+  - http-cpu.yaml
