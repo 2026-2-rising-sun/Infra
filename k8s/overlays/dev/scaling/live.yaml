@@ -12,7 +12,11 @@
 #   "지표값 / 파드 수 가 threshold 를 넘지 않게" 파드 수를 맞춘다. 우리는 둘 다 "파드 하나가
 #   감당할 양"을 정하는 것이라 AverageValue 가 맞다.
 #     연결 수 1,200 / 500 → 파드 3개,  신청자 2,500 / 1,000 → 파드 3개
-#   쿼리에서 sum() 으로 전체 값을 만들어야 이 계산이 성립한다. 파드별 값을 그대로 주면 안 된다.
+#   쿼리는 "전체 값 하나"를 만들어야 이 계산이 성립한다. 파드별 값을 그대로 주면 안 된다.
+#   단, 두 지표는 합치는 방법이 다르다.
+#     - 연결 수는 파드마다 자기 연결만 세므로 sum() 이 전체다.
+#     - 신청자 수는 notification 이 DB 를 읽어 내는 값이라 파드마다 같은 숫자다. sum() 하면
+#       notification 파드 수만큼 곱해지므로 max() 로 하나만 고른다 (2단계 구현 확인).
 #
 # namespace 라벨로 거르는 이유: Prometheus 는 관측 네임스페이스에서 모든 앱 네임스페이스를 긁는다.
 # 팀 환경(shoppinglive-team)의 live 연결 수가 dev 파드 수에 섞여 들어가면 안 된다.
@@ -61,10 +65,11 @@ spec:
         ignoreNullValues: "true"
     # 신청자 1,000 명당 파드 1개. 방송 시작 10분 전부터 값이 생기고, 시작 후 0 으로 돌아간다.
     # 그 뒤에는 위의 실제 연결 수가 파드 수를 받친다.
+    # 지표는 notification-service 가 노출한다 (알림 신청 데이터가 거기 있다). 파드마다 같은 값이라 max().
     - type: prometheus
       metricType: AverageValue
       metadata:
         serverAddress: http://prometheus.shoppinglive-observability:9090
-        query: sum(shoppinglive_broadcast_upcoming_alert_subscribers{namespace="shoppinglive-dev"})
+        query: max(shoppinglive_broadcast_upcoming_alert_subscribers{namespace="shoppinglive-dev",service="notification-service"})
         threshold: "1000"
         ignoreNullValues: "true"

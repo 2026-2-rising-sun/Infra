@@ -55,7 +55,7 @@ kubectl -n $NS run kafka-load --rm -it --restart=Never \
 
 ```promql
 sum(shoppinglive_live_sse_connections{namespace="shoppinglive-dev",service="live-service"})
-sum(shoppinglive_broadcast_upcoming_alert_subscribers{namespace="shoppinglive-dev"})
+max(shoppinglive_broadcast_upcoming_alert_subscribers{namespace="shoppinglive-dev",service="notification-service"})
 ```
 
 이 두 값 / 임계값(500, 1000)의 올림이 HPA 가 원하는 파드 수다. 선제 확장은 방송 `scheduledAt` 10분 전부터 값이 생기므로, 알림 신청자가 있는 방송을 10분 뒤로 예약해 두면 확인할 수 있다.
