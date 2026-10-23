@@ -1,0 +1,11 @@
+# AWS Load Balancer Controller Helm values. __CLUSTER_NAME__, __AWS_REGION__, __VPC_ID__ 는 install.sh 가 치환한다.
+clusterName: __CLUSTER_NAME__
+region: __AWS_REGION__
+vpcId: __VPC_ID__
+serviceAccount:
+  name: aws-load-balancer-controller # modules/nlb 의 Pod Identity 연결 이름과 같아야 한다
+replicaCount: 1
+nodeSelector:
+  shoppinglive.io/node-role: system
+# Ingress 는 쓰지 않는다(Gateway API 로 전환). Service → NLB 만 담당한다.
+enableServiceMutatorWebhook: false
