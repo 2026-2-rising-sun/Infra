@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import secrets
 import subprocess
@@ -78,6 +79,11 @@ def manifest(args, kubelets=(), ca_bundle=""):
     template['spec']['hostAliases'] = list(kubelets)
     template['spec']['volumes'].append(dict(name='kubelet-ca', configMap={'name':'kubelet-ca'}))
     template['spec']['containers'][0]['volumeMounts'].append(dict(name='kubelet-ca', mountPath='/etc/kubelet', readOnly=True))
+    # Slack webhook 은 Secret alertmanager-slack 을 파일로 마운트해 읽는다 (alertmanager.yml 의 slack_api_url_file).
+    workload('alertmanager','prom/alertmanager:v0.34.1',[9093],['--config.file=/etc/alertmanager/alertmanager.yml','--storage.path=/data'],{'alertmanager.yml':'/etc/alertmanager/alertmanager.yml'},storage=True,memory='128Mi')
+    alertmanager = next(i for i in items if i['kind']=='Deployment' and i['metadata']['name']=='alertmanager')
+    alertmanager['spec']['template']['spec']['volumes'].append(dict(name='slack', secret=dict(secretName='alertmanager-slack')))
+    alertmanager['spec']['template']['spec']['containers'][0]['volumeMounts'].append(dict(name='slack', mountPath='/etc/alertmanager/slack', readOnly=True))
     workload('loki','grafana/loki:3.5.3',[3100],['-config.file=/etc/loki/config.yml'],{'loki.yml':'/etc/loki/config.yml'},storage=True,memory='384Mi')
     workload('tempo','grafana/tempo:2.8.2',[3200,4318],['-config.file=/etc/tempo/config.yml'],{'tempo.yml':'/etc/tempo/config.yml'},storage=True,memory='768Mi',env=[dict(name='GOMEMLIMIT',value='600MiB'),dict(name='GOMAXPROCS',value='2')])
     workload('alloy','grafana/alloy:v1.10.2',[12345,4318],['run','--server.http.listen-addr=0.0.0.0:12345','--storage.path=/data','/etc/alloy/config.alloy'],{'alloy.alloy':'/etc/alloy/config.alloy'},storage=True,memory='192Mi')
@@ -136,6 +142,14 @@ def main():
     run(args,'apply','-f','-',data=json.dumps(ns).encode())
     if not secret_exists(args,'grafana-admin'):
         create_secret(args,'grafana-admin',{'password':secrets.token_urlsafe(32)})
+    # webhook 이 환경변수로 오면 항상 갱신하고, 없으면 자리표시자를 한 번만 만든다.
+    # 자리표시자로는 Slack 전송이 실패하고 Alertmanager 로그에 남는다. 값은 출력하거나 Git 에 저장하지 않는다.
+    webhook=os.environ.get('SLACK_WEBHOOK_URL')
+    if webhook:
+        create_secret(args,'alertmanager-slack',{'url':webhook})
+    elif not secret_exists(args,'alertmanager-slack'):
+        create_secret(args,'alertmanager-slack',{'url':'https://hooks.slack.com/services/NOT-CONFIGURED'})
+        print('SLACK_WEBHOOK_URL 이 없어 Slack 알림은 자리표시자로 둡니다. 설정하려면 SLACK_WEBHOOK_URL=... 로 다시 실행하세요.')
     if not secret_exists(args,'postgres-exporter'):
         password=secrets.token_hex(24)
         # pg_monitor만 부여한다. 실제 비밀번호·연결 문자열은 출력하거나 Git에 저장하지 않는다.
