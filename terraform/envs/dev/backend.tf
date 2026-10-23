@@ -1,19 +1,10 @@
-# 상태 파일 백엔드 설정.
+# 상태 파일 백엔드. terraform/bootstrap 이 만든 S3 버킷 + DynamoDB 잠금을 쓴다.
 #
-# 지금은 로컬 백엔드로 두고, 팀이 AWS 계정을 확보하면 S3 + DynamoDB 잠금으로 전환한다.
-# 전환 시 아래 local 블록을 지우고 s3 블록의 주석을 해제한 뒤 `terraform init -migrate-state` 를 실행한다.
+# 버킷 이름에 계정 ID 가 들어가서 여기 고정하지 않고 backend.hcl 로 넘긴다:
+#   terraform -chdir=terraform/envs/dev init -backend-config=backend.hcl
+# backend.hcl 은 backend.hcl.example 을 복사해 채운다(git 에 넣지 않는다).
+# CI 의 validate 는 -backend=false 라 이 블록을 읽지 않는다.
 
 terraform {
-  backend "local" {
-    path = "terraform.tfstate"
-  }
-
-  # TODO: 원격 상태로 전환
-  # backend "s3" {
-  #   bucket         = "shoppinglive-tfstate"
-  #   key            = "envs/dev/terraform.tfstate"
-  #   region         = "ap-northeast-2"
-  #   dynamodb_table = "shoppinglive-tfstate-lock"
-  #   encrypt        = true
-  # }
+  backend "s3" {}
 }
