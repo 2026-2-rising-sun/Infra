@@ -159,11 +159,22 @@ make ui
 
 Grafana(13000), Kafka UI(18080), RedisInsight(15540)의 접속 주소를 출력한다. Ctrl+C는 이번 실행의 연결만 종료하며 kind·서비스·DB는 유지한다. 이미 사용 중인 포트가 있으면 안내 후 종료하며 기존 프로세스를 끊지 않는다. `make`가 없으면 `python3 observability/local/ui.py`로 같은 기능을 실행할 수 있다.
 
-Prometheus 원본 화면이 필요할 때만 별도 터미널에서 추가한다.
+Prometheus·Alertmanager 원본 화면이 필요할 때만 별도 터미널에서 추가한다.
 
 ```sh
 kubectl --context kind-shoppinglive-dev -n shoppinglive-observability port-forward svc/prometheus 19090:9090
+kubectl --context kind-shoppinglive-dev -n shoppinglive-observability port-forward svc/alertmanager 19093:9093
 ```
+
+### Slack 알림
+
+`observability/local/alerts.yml`의 규칙(서비스 다운·5xx 비율·p99·컨슈머 랙·Kafka/Redis 다운·Pod 재시작·오토스케일 상한)이 울리면 Alertmanager가 Slack으로 보낸다. webhook은 Secret `alertmanager-slack`에만 두고 Git에 넣지 않는다.
+
+```sh
+SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...' python3 observability/local/deploy.py --apply
+```
+
+환경변수 없이 실행하면 자리표시자 Secret이 만들어져 전송이 실패하고 `kubectl -n shoppinglive-observability logs deploy/alertmanager`에 `Notify attempt failed`로 남는다. 설정 뒤 같은 명령을 다시 실행하면 Secret이 갱신된다. Grafana의 Alerting 메뉴(데이터소스 Alertmanager)에서도 현재 알림과 silence를 볼 수 있다.
 
 Frontend 레포에서는 별도 터미널로 기존 실행 경로를 사용한다.
 

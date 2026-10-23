@@ -1,6 +1,13 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+# 알림 규칙은 alerts.yml 에 두고 deploy.py 가 같은 ConfigMap 방식으로 마운트한다.
+rule_files:
+  - /etc/prometheus/alerts.yml
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
 scrape_configs:
   - job_name: applications
     kubernetes_sd_configs:
@@ -28,7 +35,7 @@ scrape_configs:
     metrics_path: /actuator/prometheus
   - job_name: infrastructure
     static_configs:
-      - targets: ['redis-exporter:9121', 'kafka-exporter:9308', 'postgres-exporter:9187', 'kube-state-metrics:8080', 'alloy:12345', 'prometheus:9090']
+      - targets: ['redis-exporter:9121', 'kafka-exporter:9308', 'postgres-exporter:9187', 'kube-state-metrics:8080', 'alloy:12345', 'prometheus:9090', 'alertmanager:9093']
   - job_name: kubelet
     scheme: https
     bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token

@@ -68,6 +68,13 @@ make status  # 앱·인프라·모니터링 Pod 상태 확인
 make ui      # 프론트 없이 관리 UI 3개만 연결
 ```
 
+Slack 알림을 받으려면 webhook을 환경변수로 넘겨 관측 스택을 다시 적용합니다(값은 Git에 넣지 않습니다). 자세한 내용은 [1단계 통합 문서의 Slack 알림](../../docs/observability-phase1.md#slack-알림)을 참고하세요.
+
+```bash
+KUBECONFIG=.local-team/kubeconfig SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...' \
+  python3 observability/local/deploy.py --context kind-shoppinglive-team --app-namespace shoppinglive-team --apply
+```
+
 Ctrl+C는 해당 명령이 만든 프론트·포트 연결만 종료합니다. kind와 서비스는 계속 실행됩니다. 컴퓨터 자원을 반환하려면 연결을 종료한 뒤 아래처럼 노드만 중지할 수 있습니다. 다음 `make start`가 다시 켭니다.
 
 ```bash

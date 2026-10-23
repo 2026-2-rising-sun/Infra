@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import secrets
 import subprocess
@@ -43,7 +44,9 @@ def manifest(args, kubelets=(), ca_bundle=""):
     for namespace in [args.app_namespace, ns]:
         rbac('prometheus', [dict(apiGroups=[''], resources=['pods'], verbs=read)], namespace)
         rbac('kube-state-metrics', [dict(apiGroups=[''], resources=['pods'], verbs=read),
-             dict(apiGroups=['apps'], resources=['deployments','replicasets','statefulsets','daemonsets'], verbs=read)], namespace)
+             dict(apiGroups=['apps'], resources=['deployments','replicasets','statefulsets','daemonsets'], verbs=read),
+             # KEDA 가 만드는 HPA 의 현재/상한 replica 를 읽어 "상한 도달" 알림에 쓴다.
+             dict(apiGroups=['autoscaling'], resources=['horizontalpodautoscalers'], verbs=read)], namespace)
     rbac('prometheus', [dict(apiGroups=[''], resources=['nodes'], verbs=read),
          dict(apiGroups=[''], resources=['nodes/metrics'], verbs=['get'])])
     rbac('kube-state-metrics', [dict(apiGroups=[''], resources=['nodes'], verbs=read)])
@@ -69,13 +72,18 @@ def manifest(args, kubelets=(), ca_bundle=""):
         if extra: pod.update(extra)
         add('Deployment', name, spec=dict(replicas=1, strategy={'type':'Recreate'}, selector=dict(matchLabels={'app':name}), template=dict(metadata=dict(labels={'app':name},annotations={'shoppinglive/config':hashlib.sha256(json.dumps([i for i in items if i['kind']=='ConfigMap' and i['metadata']['name'].startswith(name+'-')],sort_keys=True).encode()).hexdigest()}),spec=pod)))
         add('Service', name, spec=dict(selector={'app':name},ports=[dict(name='p'+str(p),port=p,targetPort=p) for p in ports]))
-    workload('prometheus','prom/prometheus:v3.5.0',[9090],['--config.file=/etc/prometheus/prometheus.yml','--storage.tsdb.path=/data','--storage.tsdb.retention.time=24h','--storage.tsdb.retention.size=1GB'], {'prometheus.yml':'/etc/prometheus/prometheus.yml'}, storage=True,memory='384Mi')
+    workload('prometheus','prom/prometheus:v3.5.0',[9090],['--config.file=/etc/prometheus/prometheus.yml','--storage.tsdb.path=/data','--storage.tsdb.retention.time=24h','--storage.tsdb.retention.size=1GB'], {'prometheus.yml':'/etc/prometheus/prometheus.yml','alerts.yml':'/etc/prometheus/alerts.yml'}, storage=True,memory='384Mi')
     prometheus = next(i for i in items if i['kind']=='Deployment' and i['metadata']['name']=='prometheus')
     template = prometheus['spec']['template']
     template['metadata']['annotations']['shoppinglive/kubelet-tls'] = hashlib.sha256((ca_bundle+json.dumps(kubelets)).encode()).hexdigest()
     template['spec']['hostAliases'] = list(kubelets)
     template['spec']['volumes'].append(dict(name='kubelet-ca', configMap={'name':'kubelet-ca'}))
     template['spec']['containers'][0]['volumeMounts'].append(dict(name='kubelet-ca', mountPath='/etc/kubelet', readOnly=True))
+    # Slack webhook 은 Secret alertmanager-slack 을 파일로 마운트해 읽는다 (alertmanager.yml 의 slack_api_url_file).
+    workload('alertmanager','prom/alertmanager:v0.34.1',[9093],['--config.file=/etc/alertmanager/alertmanager.yml','--storage.path=/data'],{'alertmanager.yml':'/etc/alertmanager/alertmanager.yml'},storage=True,memory='128Mi')
+    alertmanager = next(i for i in items if i['kind']=='Deployment' and i['metadata']['name']=='alertmanager')
+    alertmanager['spec']['template']['spec']['volumes'].append(dict(name='slack', secret=dict(secretName='alertmanager-slack')))
+    alertmanager['spec']['template']['spec']['containers'][0]['volumeMounts'].append(dict(name='slack', mountPath='/etc/alertmanager/slack', readOnly=True))
     workload('loki','grafana/loki:3.5.3',[3100],['-config.file=/etc/loki/config.yml'],{'loki.yml':'/etc/loki/config.yml'},storage=True,memory='384Mi')
     workload('tempo','grafana/tempo:2.8.2',[3200,4318],['-config.file=/etc/tempo/config.yml'],{'tempo.yml':'/etc/tempo/config.yml'},storage=True,memory='768Mi',env=[dict(name='GOMEMLIMIT',value='600MiB'),dict(name='GOMAXPROCS',value='2')])
     workload('alloy','grafana/alloy:v1.10.2',[12345,4318],['run','--server.http.listen-addr=0.0.0.0:12345','--storage.path=/data','/etc/alloy/config.alloy'],{'alloy.alloy':'/etc/alloy/config.alloy'},storage=True,memory='192Mi')
@@ -85,7 +93,7 @@ def manifest(args, kubelets=(), ca_bundle=""):
     workload('redis-exporter','oliver006/redis_exporter:v1.77.0',[9121],[f'--redis.addr=redis://redis.{args.app_namespace}.svc.cluster.local:6379'],memory='64Mi')
     workload('kafka-exporter','danielqsj/kafka-exporter:v1.9.0',[9308],[f'--kafka.server={args.kafka_service}.{args.app_namespace}.svc.cluster.local:9092','--kafka.version=3.9.0','--topic.filter=.*','--group.filter=.*'],memory='96Mi')
     workload('postgres-exporter','quay.io/prometheuscommunity/postgres-exporter:v0.17.1',[9187],['--extend.query-path=/etc/postgres/queries.yml'], {'postgres-queries.yml':'/etc/postgres/queries.yml'},env=[dict(name='DATA_SOURCE_NAME',valueFrom={'secretKeyRef':{'name':'postgres-exporter','key':'dsn'}})],memory='64Mi')
-    workload('kube-state-metrics','registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.17.0',[8080],['--resources=pods,deployments,replicasets,statefulsets,daemonsets,nodes',f'--namespaces={args.app_namespace},{ns}'],memory='96Mi')
+    workload('kube-state-metrics','registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.17.0',[8080],['--resources=pods,deployments,replicasets,statefulsets,daemonsets,nodes,horizontalpodautoscalers',f'--namespaces={args.app_namespace},{ns}'],memory='96Mi')
     workload('node-exporter','prom/node-exporter:v1.9.1',[9100],['--path.rootfs=/host','--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)'],memory='64Mi',extra={'hostPID':True,'volumes':[{'name':'host','hostPath':{'path':'/'}}]})
     node=next(i for i in items if i['kind']=='Deployment' and i['metadata']['name']=='node-exporter')
     node['kind']='DaemonSet'
@@ -137,6 +145,14 @@ def main():
     run(args,'apply','-f','-',data=json.dumps(ns).encode())
     if not secret_exists(args,'grafana-admin'):
         create_secret(args,'grafana-admin',{'password':secrets.token_urlsafe(32)})
+    # webhook 이 환경변수로 오면 항상 갱신하고, 없으면 자리표시자를 한 번만 만든다.
+    # 자리표시자로는 Slack 전송이 실패하고 Alertmanager 로그에 남는다. 값은 출력하거나 Git 에 저장하지 않는다.
+    webhook=os.environ.get('SLACK_WEBHOOK_URL')
+    if webhook:
+        create_secret(args,'alertmanager-slack',{'url':webhook})
+    elif not secret_exists(args,'alertmanager-slack'):
+        create_secret(args,'alertmanager-slack',{'url':'https://hooks.slack.com/services/NOT-CONFIGURED'})
+        print('SLACK_WEBHOOK_URL 이 없어 Slack 알림은 자리표시자로 둡니다. 설정하려면 SLACK_WEBHOOK_URL=... 로 다시 실행하세요.')
     if not secret_exists(args,'postgres-exporter'):
         password=secrets.token_hex(24)
         # pg_monitor만 부여한다. 실제 비밀번호·연결 문자열은 출력하거나 Git에 저장하지 않는다.

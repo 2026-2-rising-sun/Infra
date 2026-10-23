@@ -30,3 +30,12 @@ datasources:
         spanEndTimeShift: '1m'
         filterByTraceID: true
         tags: [{key: service.name, value: service}]
+  # Grafana Alerting 화면에서 현재 울리는 알림과 silence 를 본다. 규칙 자체는 Prometheus 가 평가한다.
+  - name: Alertmanager
+    uid: alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    jsonData:
+      implementation: prometheus
+      handleGrafanaManagedAlerts: false

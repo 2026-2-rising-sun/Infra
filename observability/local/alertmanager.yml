@@ -1,0 +1,46 @@
+# Alertmanager 설정. Prometheus 가 보낸 알림을 묶어서 Slack 채널 하나로 보낸다.
+#
+# webhook 주소는 git 에 두지 않는다. deploy.py 가 Secret alertmanager-slack(key: url) 을 만들고
+# 이 파일은 그 Secret 이 마운트된 경로만 가리킨다. Secret 값이 자리표시자면 전송이 실패하고
+# Alertmanager 로그에 남는다 (조용히 버려지지 않는다).
+global:
+  slack_api_url_file: /etc/alertmanager/slack/url
+  resolve_timeout: 5m
+
+route:
+  receiver: slack
+  # 같은 알림이 서비스별로 여러 Pod 에서 나면 한 메시지로 묶는다.
+  group_by: [alertname, service]
+  group_wait: 30s
+  group_interval: 5m
+  # 해결되지 않은 알림은 2시간마다 다시 알린다. 방송 한 번 길이보다 길게 잡아 도배를 막는다.
+  repeat_interval: 2h
+  routes:
+    - matchers: [severity="critical"]
+      repeat_interval: 1h
+
+inhibit_rules:
+  # 서비스가 아예 죽었으면 그 서비스의 오류율·지연 알림은 같은 원인이라 숨긴다.
+  - source_matchers: [alertname="ServiceDown"]
+    target_matchers: [alertname=~"HighErrorRate|HighLatencyP99"]
+    equal: [service]
+  # Kafka 가 죽었으면 랙 알림은 의미가 없다.
+  - source_matchers: [alertname="KafkaDown"]
+    target_matchers: [alertname="KafkaConsumerLagHigh"]
+
+receivers:
+  - name: slack
+    slack_configs:
+      - send_resolved: true
+        # 채널은 webhook 에 묶여 있어 여기서 정하지 않는다.
+        title: >-
+          {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }}
+          [{{ .CommonLabels.severity | toUpper }}] {{ .CommonLabels.alertname }}
+          {{ if .CommonLabels.service }}· {{ .CommonLabels.service }}{{ end }}
+          ({{ .Alerts.Firing | len }}건)
+        text: |-
+          {{ range .Alerts -}}
+          • *{{ .Annotations.summary }}*
+            {{ .Annotations.description }}
+            시작 {{ .StartsAt.Format "15:04:05" }}{{ if ne .Status "firing" }} · 해결 {{ .EndsAt.Format "15:04:05" }}{{ end }}
+          {{ end }}
