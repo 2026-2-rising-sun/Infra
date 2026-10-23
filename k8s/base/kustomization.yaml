@@ -3,6 +3,7 @@ kind: Kustomization
 
 # 환경 공통 매니페스트. 환경별 차이는 overlays/{dev,perf,demo} 에서 patch 로만 표현한다.
 resources:
+  - member-session-policy.yaml
   - member-service
   - shopping-service
   - commerce-service

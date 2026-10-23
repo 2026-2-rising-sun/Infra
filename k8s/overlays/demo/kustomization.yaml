@@ -28,3 +28,10 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/0/value
         value: demo
+  - target:
+      kind: ConfigMap
+      name: member-session-policy
+    patch: |-
+      - op: replace
+        path: /data/member-base-url
+        value: http://demo-member-service:8080
