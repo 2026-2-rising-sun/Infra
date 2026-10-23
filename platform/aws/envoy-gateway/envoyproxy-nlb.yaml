@@ -1,0 +1,47 @@
+# Envoy Gateway 의 데이터 플레인 Service 를 AWS NLB 로 노출하는 설정.
+#
+# Gateway(k8s/base, 1단계)가 spec.infrastructure.parametersRef 로 이 EnvoyProxy 를 가리키면
+# Envoy Gateway 가 만드는 Service 에 아래 어노테이션이 붙고, AWS Load Balancer Controller 가 NLB 를 만든다.
+# EnvoyProxy 는 Gateway 와 같은 네임스페이스에 있어야 한다.
+#
+# TLS 는 NLB 에서 끝난다(서울 ACM 인증서). NLB 443 → Envoy 443(평문 HTTP). 그래서 Gateway 에 port 443 / protocol HTTP
+# 리스너가 하나 더 필요하다(gateway-aws-patch.yaml 참고). Envoy 가 TLS 를 하지 않으니 인증서 Secret 을 클러스터에 안 둔다.
+#
+# __NLB_SECURITY_GROUP__, __ORIGIN_CERTIFICATE_ARN__, __APP_NAMESPACE__ 는 install.sh 가 Terraform output 으로 치환한다.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: nlb
+  namespace: __APP_NAMESPACE__
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: LoadBalancer
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-type: external
+          service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+          # ip 타입이면 NLB 가 Envoy 파드 IP 로 직접 보낸다. 노드 포트를 거치지 않아 홉이 하나 준다.
+          service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+          # CloudFront 오리진 IP 대역만 허용하는 보안그룹(terraform modules/nlb)
+          service.beta.kubernetes.io/aws-load-balancer-security-groups: __NLB_SECURITY_GROUP__
+          service.beta.kubernetes.io/aws-load-balancer-manage-backend-security-group-rules: "true"
+          # 443 에서 TLS 종료. 인증서는 api-origin.<도메인> 용 서울 ACM
+          service.beta.kubernetes.io/aws-load-balancer-ssl-cert: __ORIGIN_CERTIFICATE_ARN__
+          service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+          service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+          # SSE 장기 연결. NLB 유휴 타임아웃 350초는 고정값이고, heartbeat 15초면 걸리지 않는다.
+          service.beta.kubernetes.io/aws-load-balancer-attributes: deletion_protection.enabled=false
+      envoyDeployment:
+        replicas: 2
+        pod:
+          nodeSelector:
+            shoppinglive.io/node-role: system
+        container:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
