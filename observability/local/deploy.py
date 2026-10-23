@@ -43,7 +43,9 @@ def manifest(args, kubelets=(), ca_bundle=""):
     for namespace in [args.app_namespace, ns]:
         rbac('prometheus', [dict(apiGroups=[''], resources=['pods'], verbs=read)], namespace)
         rbac('kube-state-metrics', [dict(apiGroups=[''], resources=['pods'], verbs=read),
-             dict(apiGroups=['apps'], resources=['deployments','replicasets','statefulsets','daemonsets'], verbs=read)], namespace)
+             dict(apiGroups=['apps'], resources=['deployments','replicasets','statefulsets','daemonsets'], verbs=read),
+             # KEDA 가 만드는 HPA 의 현재/상한 replica 를 읽어 "상한 도달" 알림에 쓴다.
+             dict(apiGroups=['autoscaling'], resources=['horizontalpodautoscalers'], verbs=read)], namespace)
     rbac('prometheus', [dict(apiGroups=[''], resources=['nodes'], verbs=read),
          dict(apiGroups=[''], resources=['nodes/metrics'], verbs=['get'])])
     rbac('kube-state-metrics', [dict(apiGroups=[''], resources=['nodes'], verbs=read)])
@@ -85,7 +87,7 @@ def manifest(args, kubelets=(), ca_bundle=""):
     workload('redis-exporter','oliver006/redis_exporter:v1.77.0',[9121],[f'--redis.addr=redis://redis.{args.app_namespace}.svc.cluster.local:6379'],memory='64Mi')
     workload('kafka-exporter','danielqsj/kafka-exporter:v1.9.0',[9308],[f'--kafka.server=kafka.{args.app_namespace}.svc.cluster.local:9092','--kafka.version=3.9.0','--topic.filter=.*','--group.filter=.*'],memory='96Mi')
     workload('postgres-exporter','quay.io/prometheuscommunity/postgres-exporter:v0.17.1',[9187],['--extend.query-path=/etc/postgres/queries.yml'], {'postgres-queries.yml':'/etc/postgres/queries.yml'},env=[dict(name='DATA_SOURCE_NAME',valueFrom={'secretKeyRef':{'name':'postgres-exporter','key':'dsn'}})],memory='64Mi')
-    workload('kube-state-metrics','registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.17.0',[8080],['--resources=pods,deployments,replicasets,statefulsets,daemonsets,nodes',f'--namespaces={args.app_namespace},{ns}'],memory='96Mi')
+    workload('kube-state-metrics','registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.17.0',[8080],['--resources=pods,deployments,replicasets,statefulsets,daemonsets,nodes,horizontalpodautoscalers',f'--namespaces={args.app_namespace},{ns}'],memory='96Mi')
     workload('node-exporter','prom/node-exporter:v1.9.1',[9100],['--path.rootfs=/host','--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)'],memory='64Mi',extra={'hostPID':True,'volumes':[{'name':'host','hostPath':{'path':'/'}}]})
     node=next(i for i in items if i['kind']=='Deployment' and i['metadata']['name']=='node-exporter')
     node['kind']='DaemonSet'

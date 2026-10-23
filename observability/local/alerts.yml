@@ -1,0 +1,106 @@
+# Prometheus 알림 규칙. prometheus.yml 의 rule_files 로 읽히고 Alertmanager 를 거쳐 Slack 으로 간다.
+#
+# 라벨 기준
+#   - 앱 지표는 prometheus.yml 의 applications job 이 service(<이름>-service)·pod·namespace 를 붙인다.
+#   - 인프라 exporter 는 infrastructure job 의 static target 이라 instance 가 "redis-exporter:9121" 같은 주소다.
+#   - severity 는 두 단계만 쓴다. critical = 사용자 요청이 실제로 실패하는 중, warning = 아직은 버티지만 봐야 함.
+#
+# 임계값은 설계안(4.7)의 출발값이다. 부하 테스트 결과를 보고 조정한다.
+# /actuator 경로는 probe·수집 요청이라 사용자 요청 집계에서 뺀다.
+groups:
+  - name: services
+    rules:
+      - alert: ServiceDown
+        expr: up{job="applications"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} 지표 수집 실패"
+          description: "{{ $labels.pod }} 의 관리 포트(9090)에서 2분 동안 지표를 못 읽고 있다. Pod 상태와 readiness 를 확인한다."
+
+      - alert: HighErrorRate
+        # 5분 창에서 5xx 응답 비율. 요청이 거의 없을 때 한두 건으로 튀지 않게 분모 최소 1 rps 조건을 둔다.
+        expr: |
+          (
+            sum by (service) (rate(http_server_requests_seconds_count{job="applications", status=~"5..", uri!~"/actuator.*"}[5m]))
+            /
+            sum by (service) (rate(http_server_requests_seconds_count{job="applications", uri!~"/actuator.*"}[5m]))
+          ) > 0.05
+          and
+          sum by (service) (rate(http_server_requests_seconds_count{job="applications", uri!~"/actuator.*"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} 5xx 비율 {{ $value | humanizePercentage }}"
+          description: "5분 동안 전체 요청의 5% 넘게 5xx 로 응답했다. Loki 에서 service=\"{{ $labels.service }}\" status>=500 로그를 본다."
+
+      - alert: HighLatencyP99
+        # 인스턴스별 histogram 을 먼저 합친 뒤 분위수를 구한다 (관측 1단계 문서의 PromQL 과 같은 방식).
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, service) (rate(http_server_requests_seconds_bucket{job="applications", uri!~"/actuator.*"}[5m]))
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} p99 지연 {{ $value | humanizeDuration }}"
+          description: "5분 동안 p99 응답 시간이 1초를 넘고 있다. 02 서비스·API 대시보드에서 느린 API 와 DB 커넥션 풀 대기를 본다."
+
+  - name: kafka
+    rules:
+      - alert: KafkaConsumerLagHigh
+        # 파티션별 랙을 소비자 그룹·토픽 단위로 더한다. KEDA 가 확장해도 5분 넘게 1,000 이상이면 파티션 수나 상한이 부족한 것.
+        expr: sum by (consumergroup, topic) (kafka_consumergroup_lag) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.consumergroup }} 랙 {{ $value | humanize }} ({{ $labels.topic }})"
+          description: "소비자 그룹이 5분 넘게 1,000건 이상 밀려 있다. 소비 Pod 수가 maxReplicaCount 에 닿았는지, 토픽 파티션 수가 상한인지 확인한다."
+
+      - alert: KafkaDown
+        expr: up{job="infrastructure", instance=~"kafka-exporter.*"} == 0 or kafka_brokers < 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka 브로커 응답 없음"
+          description: "kafka-exporter 가 브로커를 못 보고 있다. 방송 시작 이벤트와 알림 발송이 멈춘다. Outbox 는 쌓였다가 복구 후 재전송된다."
+
+  - name: redis
+    rules:
+      - alert: RedisDown
+        # live 전용 Redis. 죽으면 채팅·좋아요 중계와 시청자 수 API 가 멈춘다 (방송 영상·주문은 영향 없음).
+        expr: up{job="infrastructure", instance=~"redis-exporter.*"} == 0 or redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis 응답 없음"
+          description: "live 의 SSE 중계와 시청자 수가 멈춘다. Redis Pod 를 확인하고, 복구까지 걸린 시간을 부하 테스트 기록에 남긴다."
+
+  - name: kubernetes
+    rules:
+      - alert: PodRestartingOften
+        expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }} 15분 안에 {{ $value | humanize }}회 재시작"
+          description: "CrashLoop 또는 OOM 가능성. kubectl describe pod 와 이전 컨테이너 로그(--previous)를 본다."
+
+      - alert: AutoscalerAtMax
+        # KEDA 는 ScaledObject 마다 HPA(keda-hpa-<이름>)를 만들므로 HPA 지표로 상한 도달을 본다.
+        expr: |
+          kube_horizontalpodautoscaler_status_current_replicas >= kube_horizontalpodautoscaler_spec_max_replicas
+          and kube_horizontalpodautoscaler_spec_max_replicas > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.horizontalpodautoscaler }} 가 상한 {{ $value }}개에 10분째 머묾"
+          description: "더 늘릴 수 없는 상태다. 부하가 계속되면 maxReplicaCount 나 노드(Karpenter) 여유를 늘린다."
