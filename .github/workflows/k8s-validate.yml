@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - 'k8s/**'
+      - 'platform/kind/**'
       - 'observability/local/**'
       - 'local/team/**'
       - 'Makefile'
@@ -37,6 +38,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: 로컬 관측 설정 구문과 생성 결과 확인
         run: |
+          kubectl kustomize platform/kind/metrics-server > /tmp/metrics-server.yaml
           python3 -m py_compile k8s/local/observe.py observability/local/deploy.py observability/local/instrument.py observability/local/ui.py
           python3 -m py_compile local/team/run.py local/team/seed.py
           python3 -m unittest discover -s local/team -p 'test_*.py'
