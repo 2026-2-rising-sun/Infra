@@ -73,6 +73,48 @@ spec:
       cpu: "1"
       memory: 1Gi
 ---
+# Backend 가 쓰는 토픽. 파티션 수는 컨슈머 확장의 상한이라 여기서 정한다 (설계안 4.4 출발값).
+# 부하 테스트에서 바꿔 보며 랙 해소 시간을 비교한다. 파티션은 늘릴 수만 있고 줄이지 못한다.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: live.broadcast.v1
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 6
+  replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: commerce.payment-group.v1
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 3
+  replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: commerce.coupon-info.v1
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 6
+  replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: commerce.sales-info.v1
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 3
+  replicas: 1
+---
 # 이전 Deployment 시절의 Service 이름(kafka:9092)을 그대로 쓰는 곳이 남아 있다:
 # Backend dev 프로필 기본값, Kafka UI(tools), 관측 스택의 kafka-exporter·observe.py.
 # Strimzi 의 부트스트랩 Service 는 kafka-kafka-bootstrap 이라 이름이 다르다.
