@@ -1,0 +1,70 @@
+{
+  "uid": "loadtest",
+  "title": "06 · 부하 테스트",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "5s",
+  "time": {"from": "now-15m", "to": "now"},
+  "timezone": "browser",
+  "tags": ["shoppinglive", "local", "k6"],
+  "templating": {"list": [
+    {"name": "testid", "type": "query", "datasource": {"type": "prometheus", "uid": "prometheus"}, "query": "label_values(k6_vus, testid)", "includeAll": true, "allValue": ".*", "multi": false, "current": {"text": "All", "value": "$__all"}}
+  ]},
+  "panels": [
+    {"id": 1, "title": "k6 가상 사용자", "type": "timeseries", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 0, "y": 0, "w": 8, "h": 7},
+     "targets": [{"refId": "A", "expr": "max by(testid)(k6_vus{testid=~\"$testid\"})", "legendFormat": "{{testid}}"}],
+     "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}},
+    {"id": 2, "title": "k6 요청률 (req/s)", "type": "timeseries", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 8, "y": 0, "w": 8, "h": 7},
+     "targets": [{"refId": "A", "expr": "sum by(name)(rate(k6_http_reqs_total{testid=~\"$testid\"}[30s]))", "legendFormat": "{{name}}"}],
+     "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}},
+    {"id": 3, "title": "k6 실패율", "type": "timeseries", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 16, "y": 0, "w": 8, "h": 7},
+     "targets": [{"refId": "A", "expr": "sum(rate(k6_http_req_failed_rate{testid=~\"$testid\"}[30s])) / clamp_min(sum(rate(k6_http_reqs_total{testid=~\"$testid\"}[30s])), 1)", "legendFormat": "failed"}],
+     "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []}},
+
+    {"id": 4, "title": "k6 응답 시간 p95 / p99 (요청 이름별)", "type": "timeseries", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 0, "y": 7, "w": 12, "h": 8},
+     "targets": [
+       {"refId": "A", "expr": "max by(name)(k6_http_req_duration_p95{testid=~\"$testid\"})", "legendFormat": "p95 {{name}}"},
+       {"refId": "B", "expr": "max by(name)(k6_http_req_duration_p99{testid=~\"$testid\"})", "legendFormat": "p99 {{name}}"}
+     ],
+     "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []}},
+    {"id": 5, "title": "서버 쪽 API p99 (서비스별)", "type": "timeseries", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 12, "y": 7, "w": 12, "h": 8},
+     "targets": [{"refId": "A", "expr": "histogram_quantile(0.99, sum by(le, service)(rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*\"}[1m])))", "legendFormat": "{{service}}"}],
+     "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}},
+
+    {"id": 6, "title": "Kafka 컨슈머 랙 (그룹·토픽)", "type": "timeseries", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 0, "y": 15, "w": 8, "h": 8},
+     "targets": [{"refId": "A", "expr": "sum by(consumergroup, topic)(kafka_consumergroup_lag)", "legendFormat": "{{consumergroup}} / {{topic}}"}],
+     "fieldConfig": {"defaults": {"unit": "short", "min": 0}, "overrides": []}},
+    {"id": 7, "title": "가용 파드 수 (Deployment)", "type": "timeseries", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 8, "y": 15, "w": 8, "h": 8},
+     "targets": [{"refId": "A", "expr": "kube_deployment_status_replicas_available{namespace=\"__APP_NAMESPACE__\", deployment=~\".*(member|shopping|commerce|live|notification).*\"}", "legendFormat": "{{deployment}}"}],
+     "fieldConfig": {"defaults": {"unit": "short", "min": 0, "decimals": 0}, "overrides": []}},
+    {"id": 8, "title": "live SSE 연결 수 (파드별)", "type": "timeseries", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 16, "y": 15, "w": 8, "h": 8},
+     "targets": [
+       {"refId": "A", "expr": "shoppinglive_live_sse_connections", "legendFormat": "{{pod}}"},
+       {"refId": "B", "expr": "sum(shoppinglive_live_sse_connections)", "legendFormat": "합계"}
+     ],
+     "fieldConfig": {"defaults": {"unit": "short", "min": 0}, "overrides": []}},
+
+    {"id": 9, "title": "시청자 수 API 503 (시나리오 3 탐침)", "type": "timeseries", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 0, "y": 23, "w": 8, "h": 7},
+     "targets": [
+       {"refId": "A", "expr": "max(k6_viewer_count_outage_active{testid=~\"$testid\"})", "legendFormat": "503 진행 중"},
+       {"refId": "B", "expr": "max(k6_viewer_count_outage_seconds_max{testid=~\"$testid\"})", "legendFormat": "최장 503 구간(초)"}
+     ],
+     "fieldConfig": {"defaults": {"unit": "short", "min": 0}, "overrides": []}},
+    {"id": 10, "title": "쿠폰 발급 결과 (시나리오 2)", "type": "stat", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 8, "y": 23, "w": 8, "h": 7},
+     "targets": [
+       {"refId": "A", "expr": "max(k6_coupon_issued_total{testid=~\"$testid\"})", "legendFormat": "발급 201", "instant": true},
+       {"refId": "B", "expr": "max(k6_coupon_already_total{testid=~\"$testid\"})", "legendFormat": "이미 보유 200", "instant": true},
+       {"refId": "C", "expr": "max(k6_coupon_exhausted_total{testid=~\"$testid\"})", "legendFormat": "한도 소진 4xx", "instant": true},
+       {"refId": "D", "expr": "max(k6_coupon_unexpected_total{testid=~\"$testid\"})", "legendFormat": "예상 밖", "instant": true}
+     ],
+     "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+     "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "colorMode": "value"}},
+    {"id": 11, "title": "Hikari 커넥션 대기 (commerce)", "type": "timeseries", "datasource": {"type": "prometheus", "uid": "prometheus"}, "gridPos": {"x": 16, "y": 23, "w": 8, "h": 7},
+     "targets": [
+       {"refId": "A", "expr": "max by(pod)(hikaricp_connections_pending{service=\"commerce-service\"})", "legendFormat": "pending {{pod}}"},
+       {"refId": "B", "expr": "max by(pod)(hikaricp_connections_active{service=\"commerce-service\"})", "legendFormat": "active {{pod}}"}
+     ],
+     "fieldConfig": {"defaults": {"unit": "short", "min": 0}, "overrides": []}}
+  ]
+}
