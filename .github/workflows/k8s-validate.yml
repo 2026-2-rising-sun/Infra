@@ -7,6 +7,9 @@ on:
   pull_request:
     paths:
       - 'k8s/**'
+      - 'observability/local/**'
+      - 'local/team/**'
+      - 'Makefile'
       - '.github/workflows/k8s-validate.yml'
 
 permissions:
@@ -27,3 +30,16 @@ jobs:
 
       - name: Render k8s/overlays/${{ matrix.env }}
         run: kubectl kustomize "k8s/overlays/${{ matrix.env }}"
+
+  local-observability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 로컬 관측 설정 구문과 생성 결과 확인
+        run: |
+          python3 -m py_compile k8s/local/observe.py observability/local/deploy.py observability/local/instrument.py observability/local/ui.py
+          python3 -m py_compile local/team/run.py local/team/seed.py
+          python3 -m unittest discover -s local/team -p 'test_*.py'
+          python3 k8s/local/observe.py tools > /tmp/tools.json
+          python3 observability/local/deploy.py > /tmp/observability.json
+          python3 -c 'import json; from pathlib import Path; [json.loads(p.read_text()) for p in [Path("/tmp/tools.json"), Path("/tmp/observability.json"), Path("local/team/versions.json"), *Path("observability/local").glob("dashboard-*.json")]]'

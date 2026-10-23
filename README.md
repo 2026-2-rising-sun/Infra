@@ -17,15 +17,19 @@ Infra/
 ├── k8s/             # kustomize base + overlays/{dev,perf,demo}
 ├── terraform/       # AWS 인프라 코드 (골격만)
 ├── argocd/          # GitOps 배포 정의 (골격만, 미적용)
-├── observability/   # Prometheus/Grafana (골격만)
+├── observability/   # 로컬 로그·메트릭·트레이스
 ├── tests/           # e2e / performance (골격만, 툴 미정)
 └── docs/            # 런북, 성능 측정 기록
 ```
 
 각 디렉터리의 README 에 현재 상태와 결정해야 할 항목을 정리해 뒀습니다.
-현재 실제로 동작하는 것은 **`local/` 과 `k8s/`** 이고, 나머지는 자리만 잡아 둔 골격입니다.
+로컬 kind 관측 환경의 설치·지표·시나리오·실행 증거는 [1단계 통합 문서](docs/observability-phase1.md)에 정리했습니다. `terraform/`, `argocd/`, `tests/`는 기존 골격입니다.
 
-## 시작하기
+팀원이 처음 받는 경우 [최초 설치·실행 가이드](local/team/README.md)를 따라 `make setup` → `make start`를 실행합니다. 백엔드 5개·인프라·모니터링을 전용 kind에 설치하고 프론트와 UI까지 연결합니다. 원격 저장소의 고정 커밋을 사용하므로 기존 개발 폴더의 미커밋 파일이 필요하지 않습니다.
+
+`make status`는 상태 확인, `make ui`는 Grafana(13000)·Kafka UI(18080)·RedisInsight(15540)만 연결하는 명령입니다. Ctrl+C는 연결만 종료합니다.
+
+## 호스트에서 백엔드를 개발하는 경우: Compose
 
 ```sh
 cp local/.env.example local/.env     # 값 채우기
