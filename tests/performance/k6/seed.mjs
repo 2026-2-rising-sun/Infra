@@ -47,7 +47,7 @@ async function login(email, password) {
 async function ensureUser(i) {
   const email = `loadtest-${i}@load.test`;
   const r = await call('POST', api('member', '/v1/auth/signup'), { body: { email, password: PASSWORD, displayName: `부하테스트 ${i}` } });
-  if (r.status !== 201 && r.status !== 409 && r.status !== 400) throw new Error(`signup ${email}: ${r.status} ${r.text.slice(0, 200)}`);
+  if (r.status !== 201 && r.status !== 409) throw new Error(`signup ${email}: ${r.status} ${r.text.slice(0, 200)}`);
   return { email, password: PASSWORD };
 }
 

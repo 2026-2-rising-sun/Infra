@@ -8,6 +8,7 @@ on:
     paths:
       - 'k8s/**'
       - 'platform/kind/**'
+      - 'tests/performance/k6/**'
       - 'observability/local/**'
       - 'local/team/**'
       - 'Makefile'
@@ -47,3 +48,13 @@ jobs:
           python3 k8s/local/observe.py tools > /tmp/tools.json
           python3 observability/local/deploy.py > /tmp/observability.json
           python3 -c 'import json; from pathlib import Path; [json.loads(p.read_text()) for p in [Path("/tmp/tools.json"), Path("/tmp/observability.json"), Path("local/team/versions.json"), *Path("observability/local").glob("dashboard-*.json")]]'
+
+  coupon-scenario:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 쿠폰 부하 시나리오의 오류와 중복 발급 판정 확인
+        run: node --experimental-vm-modules --test tests/performance/k6/test-coupon-drop.mjs
