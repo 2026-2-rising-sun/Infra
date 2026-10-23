@@ -40,7 +40,7 @@ spec:
             - name: MANAGEMENT_SERVER_PORT
               value: "9090"
             - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
-              value: health
+              value: health,prometheus
             - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
               value: never
             - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_COMPONENTS

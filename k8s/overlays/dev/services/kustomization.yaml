@@ -27,7 +27,7 @@ patches:
             memory: 512Mi
       - op: replace
         path: /spec/template/spec/containers/0/env/0/value
-        value: dev
+        value: dev,observability
   - target:
       kind: ConfigMap
       name: member-session-policy
