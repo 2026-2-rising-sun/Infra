@@ -1,0 +1,17 @@
+# live 파드에는 시청자의 SSE 연결이 붙어 있다. 퇴거로 파드가 빠지면 그 파드의 시청자 전부가
+# 끊겼다 다시 붙는다. minAvailable: 1 로 방송 중 전부가 한꺼번에 빠지는 것만 막는다.
+#
+# 알아 둘 것: 파드가 1개일 때는 Karpenter 가 그 노드를 비울 수 없어 노드 회수가 미뤄진다.
+# 방송이 없는 시간엔 그게 비용이다. 부하 테스트 뒤 "방송 없을 때 최소 1 vs 노드 회수"를 다시 본다.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: live-service
+  labels:
+    app.kubernetes.io/name: live-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: live-service
