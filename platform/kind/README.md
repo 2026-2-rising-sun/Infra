@@ -21,3 +21,5 @@ KUBE_CONTEXT=kind-other ./platform/kind/install.sh
   이 설정 없이 만든 클러스터는 `k8s/local/port-forward-dev.sh` 가 같은 포트로 port-forward 한다.
 - AWS 에서는 같은 차트를 쓰되 EnvoyProxy 를 NLB 용으로 바꾸고 ArgoCD 가 설치한다(terraform/argocd 단계).
 - 팀 체험 환경(`make setup`, 클러스터 `shoppinglive-team`)은 아직 Frontend 의 스크립트가 Kafka 를 직접 띄운다. 그쪽 전환은 별도 작업이다.
+
+관측 설정 생성 시 `python3 observability/local/deploy.py --app-namespace shoppinglive-dev`를 사용한다. dev의 Kafka exporter는 Strimzi의 `kafka-kafka-bootstrap`에 연결한다. 기존 팀 환경은 `kafka`를 유지하며 `--kafka-service`로 변경할 수 있다.

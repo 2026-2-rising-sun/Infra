@@ -15,6 +15,7 @@ P2 팀 설명 문서는 [P2 문서 모음](https://app.notion.com/p/3ec226545d15
 Infra/
 ├── local/           # 로컬 개발용 Postgres/Redis/Kafka (docker compose)
 ├── k8s/             # kustomize base + overlays/{dev,perf,demo}
+├── platform/        # kind 에 플랫폼 구성 요소(Gateway API, Envoy Gateway, Strimzi) 설치
 ├── terraform/       # AWS 인프라 코드 (골격만)
 ├── argocd/          # GitOps 배포 정의 (골격만, 미적용)
 ├── observability/   # 로컬 로그·메트릭·트레이스
@@ -41,7 +42,7 @@ Backend 서비스는 호스트에서 직접 실행하고 여기에 붙습니다.
 
 ## 서비스 진입점
 
-별도 API 게이트웨이를 두지 않고 **k8s Ingress 의 path 라우팅**으로 5개 서비스를 하나의 엔드포인트로 묶습니다.
+별도 API 게이트웨이를 두지 않고 **Gateway API(Envoy Gateway) 의 path 라우팅**으로 5개 서비스를 하나의 엔드포인트로 묶습니다.
 Frontend 는 이 엔드포인트 하나만 호출합니다.
 
 | 경로 | 서비스 | 로컬 포트 |
