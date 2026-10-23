@@ -1,0 +1,11 @@
+# kind create cluster --name shoppinglive-dev --config platform/kind/kind-config.yaml
+# Envoy 의 NodePort(30080)를 호스트 9080 으로 연다. 이 설정 없이 만든 클러스터는
+# k8s/local/port-forward-dev.sh 가 같은 포트로 port-forward 해 준다.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 9080
+        protocol: TCP
