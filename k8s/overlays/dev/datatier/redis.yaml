@@ -56,6 +56,9 @@ spec:
               command: ["redis-cli", "ping"]
             initialDelaySeconds: 30
             periodSeconds: 20
+            # exec probe 는 노드가 바쁘면 1초를 넘긴다. 시간 초과 3회면 멀쩡한 DB 를 재시작시키므로 5초 × 6회로 둔다.
+            timeoutSeconds: 5
+            failureThreshold: 6
           resources:
             requests:
               cpu: 25m

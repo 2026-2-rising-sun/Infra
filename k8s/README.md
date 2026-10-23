@@ -96,7 +96,7 @@ kubectl kustomize k8s/overlays/dev
 공유 dev 환경에 올리기 전에 서비스 5개와 미들웨어를 한 번에 띄워 보는 절차다.
 서비스 이미지는 아직 CI 가 올리지 않으므로 Backend 레포를 옆에 받아 로컬에서 만든다(1-2 단계).
 
-**준비물**: Docker Desktop, `kubectl`, `kind`, `helm` (`brew install kind helm`), Backend 레포 클론(기본 위치 Infra 옆 `../Backend`)
+**준비물**: Docker Desktop(메모리 **12GB 이상** 할당. 서비스 JVM 5~6개 + Kafka + 관측 스택이 안정 상태에서 6~7GB 를 쓴다), `kubectl`, `kind`, `helm` (`brew install kind helm`), Backend 레포 클론(기본 위치 Infra 옆 `../Backend`)
 
 순서 요약: 클러스터 → 플랫폼(install.sh) → 이미지(build-images.sh) → 인증 키 → `apply -k` → 관측 스택(deploy.py) → 접속.
 
@@ -184,6 +184,19 @@ kubectl proxy                            # 대시보드용, 다른 터미널에�
 - Postgres/Redis 는 `local/docker-compose.yml` 과 동시에 켜 둘 수 있게 25432/26379 를 쓴다.
 - Kafka 브로커는 호스트로 연결하지 않는다. 브로커가 자기 주소를 `kafka:9092` 로 광고해서 호스트 클라이언트는
   부트스트랩 이후 접속하지 못한다. Kafka UI 를 쓰거나 `kubectl exec -n shoppinglive-dev kafka-dual-0 -- /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list` 로 확인한다.
+
+### 3-1. 전부 동시에 재시작됐을 때 (노드 재시작, Docker 재시작 뒤)
+
+JVM 여러 개와 Kafka·관측 스택이 한꺼번에 콜드 스타트하면 CPU 가 포화되어 health 체크가 시간 초과로 실패하고,
+Postgres·Kafka 까지 재시작되면서 서비스 기동이 거기에 막히는 악순환이 생길 수 있다(probe 는 완화해 뒀지만 노트북 사양에 따라 다르다).
+그때는 서비스를 잠시 0개로 내려 미들웨어부터 안정시킨다. KEDA 가 다시 늘리지 못하게 일시정지 표시를 먼저 붙인다.
+
+```sh
+kubectl annotate scaledobject -n $NS --all autoscaling.keda.sh/paused-replicas=0
+kubectl scale deploy -n $NS dev-member-service dev-shopping-service dev-commerce-service dev-live-service dev-notification-service --replicas=0
+kubectl get pods -n $NS -w                              # kafka-dual-0, postgres, redis 가 1/1 로 1분 이상 유지되면 Ctrl+C
+kubectl annotate scaledobject -n $NS --all autoscaling.keda.sh/paused-replicas-   # 해제. KEDA 가 최소 개수로 다시 올린다
+```
 
 ### 4. 정리
 
