@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# dev 애플리케이션 계층. replica 1, 리소스 요청을 가장 낮게 잡는다.
+# dev 애플리케이션 계층. 리소스 요청을 가장 낮게 잡는다. 파드 수는 ../scaling/ 의 KEDA 가 정한다.
 namePrefix: dev-
 
 resources:
@@ -28,9 +28,12 @@ patches:
   - target:
       kind: Deployment
     patch: |-
-      - op: replace
+      # replicas 는 매니페스트에서 아예 뺀다. KEDA 가 만든 HPA 가 파드 수를 소유하므로,
+      # 매니페스트에 1 이 남아 있으면 apply(또는 ArgoCD selfHeal)할 때마다 1 로 되돌려
+      # HPA 와 싸운다. 필드가 없으면 apply 가 파드 수를 건드리지 않는다.
+      # (처음 적용 때 한 번은 1 로 돌아가고, HPA 가 곧 최소치로 올린다.)
+      - op: remove
         path: /spec/replicas
-        value: 1
       - op: replace
         path: /spec/template/spec/containers/0/resources
         value:

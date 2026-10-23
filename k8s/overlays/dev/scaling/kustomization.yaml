@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# dev 의 오토스케일링 계층. KEDA ScaledObject 로 서비스별 파드 수를 조절한다.
+#
+# services/·datatier/ 와 같은 급의 계층으로 둔 이유:
+#   - services/ 의 `kind: Deployment` 패치가 여기엔 안 닿는다 (ScaledObject 는 Deployment 가 아니다).
+#   - 상·하한과 임계값은 환경마다 달라서 base 가 아니라 overlay 소속이다. perf 는 부하 테스트 결과를
+#     보고 자기 scaling/ 을 따로 만든다.
+#
+# namePrefix 는 ScaledObject 의 metadata.name 에만 붙는다. scaleTargetRef.name 은 kustomize 가
+# 참조로 인식하지 않는 평문이라 `dev-live-service` 처럼 prefix 를 직접 적는다.
+# (이 overlay 의 Deployment 이름 규칙이 바뀌면 여기도 같이 바꿔야 한다.)
+#
+# 전제: KEDA 가 설치돼 있어야 한다 (platform/kind/install.sh → components/40-keda.sh).
+# 없으면 `kubectl apply -k k8s/overlays/dev` 가 "no matches for kind ScaledObject" 로 실패한다.
+namePrefix: dev-
+
+resources:
+  - kafka-consumers.yaml
+  - live.yaml
+  - http-cpu.yaml

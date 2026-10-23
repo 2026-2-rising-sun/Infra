@@ -1,0 +1,113 @@
+# Kafka 를 소비하는 서비스는 컨슈머 랙으로 늘린다.
+#
+# 왜 CPU 가 아니라 랙인가: 알림 발송·판매정보 반영은 I/O 대기가 대부분이라 CPU 는 낮은데
+# 큐만 쌓인다. "처리 못 하고 밀린 메시지 수"가 바빠짐을 가장 먼저 보여 주는 숫자다.
+#
+# 상한은 토픽 파티션 수를 넘지 않는다. 컨슈머 그룹 안에서 한 파티션은 한 컨슈머만 읽으므로
+# 파티션보다 파드가 많으면 남는 파드는 놀기만 한다.
+#   live.broadcast.v1 6 파티션 → notification 최대 6
+#   commerce.coupon-info.v1 6 / commerce.sales-info.v1 3 → shopping 최대 4 (설계 출발값, 부하 테스트로 조정)
+#
+# lagThreshold 100 = "파드 하나가 감당할 밀린 메시지 수". KEDA 는 전체 랙 / 100 을 원하는 파드 수로 본다.
+# offsetResetPolicy 는 Spring Kafka 기본(auto.offset.reset=latest)과 맞춘다. 커밋된 오프셋이 없는
+# 새 그룹을 "처음부터 전부 밀렸다"로 오해해 최대치로 튀는 것을 막는다.
+#
+# bootstrapServers 에 네임스페이스를 붙인 이유: KEDA 오퍼레이터는 keda 네임스페이스에서 돌기 때문에
+# 짧은 이름(kafka-kafka-bootstrap)으로는 못 찾는다. 앱 파드는 같은 네임스페이스라 짧은 이름을 쓴다.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: notification-service
+  labels:
+    app.kubernetes.io/name: notification-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  scaleTargetRef:
+    name: dev-notification-service
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  pollingInterval: 15
+  # cooldownPeriod 는 0 으로 줄일 때만 쓰인다. 여기선 최소 1 이라 사실상 안 쓰이고,
+  # 축소 속도는 아래 HPA behavior 가 정한다. 설계안 값과 맞추려고 적어 둔다.
+  cooldownPeriod: 300
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          # 방송 시작 순간은 몇 초가 중요하다. 안정화 창 없이 15초마다 최대 4개씩 늘린다.
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 4
+              periodSeconds: 15
+        scaleDown:
+          # 방송 중 랙이 잠깐 비는 순간 줄였다가 다시 늘리는 흔들림을 막는다. 5분간 최고치를 유지한다.
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka-kafka-bootstrap.shoppinglive-dev:9092
+        consumerGroup: notification-service
+        topic: live.broadcast.v1
+        lagThreshold: "100"
+        offsetResetPolicy: latest
+        allowIdleConsumers: "false"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: shopping-service
+  labels:
+    app.kubernetes.io/name: shopping-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  scaleTargetRef:
+    name: dev-shopping-service
+  minReplicaCount: 1
+  # 상품 이미지가 파드 로컬 디스크에 있어서 2개 이상이면 이미지가 보였다 안 보였다 한다.
+  # S3 전환(Backend 과제) 전까지는 maxReplicaCount 를 1 로 두는 것이 안전하다. 설계 출발값(4)은
+  # 전환 뒤에 쓴다. 지금 1 로 두면 트리거가 있어도 늘지 않으므로 "랙+CPU 를 본다"는 설정만 미리 검증된다.
+  maxReplicaCount: 1
+  pollingInterval: 15
+  cooldownPeriod: 300
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  # 트리거가 여럿이면 KEDA 는 각각이 원하는 파드 수 중 가장 큰 값을 쓴다.
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka-kafka-bootstrap.shoppinglive-dev:9092
+        consumerGroup: shopping-service
+        topic: commerce.coupon-info.v1
+        lagThreshold: "100"
+        offsetResetPolicy: latest
+        allowIdleConsumers: "false"
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka-kafka-bootstrap.shoppinglive-dev:9092
+        consumerGroup: shopping-service
+        topic: commerce.sales-info.v1
+        lagThreshold: "100"
+        offsetResetPolicy: latest
+        allowIdleConsumers: "false"
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"

@@ -1,0 +1,18 @@
+# member 는 다른 네 서비스가 매 요청마다 세션 확인을 물어보는 곳이라, 노드 정리(drain)나
+# Karpenter 통합 같은 '자발적 퇴거'로 member 파드가 동시에 전부 빠지면 인증 요청이 전부 실패한다.
+# minAvailable: 1 은 "퇴거로 줄일 때 최소 1개는 남겨라"는 뜻이다. 장애(비자발적 종료)는 막지 못한다.
+#
+# 파드가 1개뿐인 환경에서는 그 1개도 퇴거할 수 없어 drain 이 멈춘다(단일 노드 kind 에선 무관).
+# dev 의 member 는 ScaledObject 최소치가 2 라 문제없고, perf/demo 는 replicas 2 다.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: member-service
+  labels:
+    app.kubernetes.io/name: member-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: member-service

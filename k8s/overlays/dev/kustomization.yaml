@@ -17,3 +17,6 @@ resources:
   - namespace.yaml
   - services
   - datatier
+  # scaling/ — KEDA ScaledObject. services/ 의 Deployment 패치가 닿지 않게 별도 계층으로 둔다.
+  #            KEDA CRD 가 먼저 설치돼 있어야 한다 (platform/kind/install.sh).
+  - scaling
