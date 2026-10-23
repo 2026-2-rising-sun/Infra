@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SSE 연결 N 개를 열어 둔 채 유지한다. Node 22 이상, 외부 패키지 없음.
 //
-//   node tests/performance/k6/sse-holder.mjs --count 500 --base http://localhost:8080 [--ramp 30] [--hold 180]
+//   node tests/performance/k6/sse-holder.mjs --count 500 --base http://localhost:9080 [--ramp 30] [--hold 180]
 //
 // 왜 따로 두나: 기본 k6 는 SSE 를 못 연다(xk6-sse 확장 필요). 그래서 "열린 연결 수"만 담당하는 스크립트를
 // k6 옆에서 돌린다. 5초마다 열린 연결 수·끊긴 수·받은 이벤트 수를 찍는다. 시나리오 3(Redis 장애)에서는
@@ -15,7 +15,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const args = parse(process.argv.slice(2));
-const BASE = (args.base || process.env.BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
+const BASE = (args.base || process.env.BASE_URL || 'http://localhost:9080').replace(/\/$/, '');
 const COUNT = Number(args.count || 100);
 const RAMP = Number(args.ramp || 30);  // 초. 이 시간에 걸쳐 COUNT 개를 연다
 const HOLD = Number(args.hold || 180); // 초. 다 연 뒤 유지하는 시간

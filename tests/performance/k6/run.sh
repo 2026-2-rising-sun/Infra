@@ -3,7 +3,7 @@
 # 파드 수·컨슈머 랙과 같은 시간축에 놓고 본다.
 #
 #   ./tests/performance/k6/run.sh 01 -e USERS=200            # 시나리오 번호 + k6 인자
-#   BASE_URL=http://localhost:8080 ./tests/performance/k6/run.sh 02
+#   BASE_URL=http://localhost:9080 ./tests/performance/k6/run.sh 02
 #
 # 전제
 #   - seed.mjs 를 먼저 실행해 .seed/seed.json 이 있어야 한다.
@@ -38,9 +38,9 @@ else
   echo "Prometheus($PROM_URL) 에 연결되지 않아 remote write 없이 실행한다." >&2
 fi
 
-echo "testid=$TESTID  BASE_URL=${BASE_URL:-http://localhost:8080}  script=$(basename "$script")"
+echo "testid=$TESTID  BASE_URL=${BASE_URL:-http://localhost:9080}  script=$(basename "$script")"
 exec k6 run "${out[@]}" \
   --tag "testid=$TESTID" \
   --summary-export "$here/.results/$TESTID.json" \
-  -e "BASE_URL=${BASE_URL:-http://localhost:8080}" \
+  -e "BASE_URL=${BASE_URL:-http://localhost:9080}" \
   "$@" "$script"

@@ -2,7 +2,7 @@
 //
 // BASE_URL 은 Gateway(Envoy) 입구다. 서비스별 접두사 /api/<service> 를 붙여 호출하면
 // Gateway 가 접두사를 떼고 각 서비스로 보낸다. Frontend 의 vite 프록시와 같은 계약이다.
-export const BASE_URL = (__ENV.BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
+export const BASE_URL = (__ENV.BASE_URL || 'http://localhost:9080').replace(/\/$/, '');
 
 // 시드 스크립트(seed.mjs)가 만든 방송·쿠폰·사용자 목록.
 // k6 의 open() 은 그 호출이 있는 파일(lib/seed.js) 기준으로 상대 경로를 푼다. 바꿀 땐 절대 경로를 준다.

@@ -27,14 +27,14 @@ k6/
    ```
 4. **시드**: 판매자 계정 `seller@local.test / seller`(local 테스트 계정)로 방송·쿠폰을 만들고 사용자 N 명을 가입시킨다. 상품이 최소 1개 있어야 쿠폰을 만들 수 있다.
    ```sh
-   node tests/performance/k6/seed.mjs --base http://localhost:8080 --users 200 --limit 100
+   node tests/performance/k6/seed.mjs --base http://localhost:9080 --users 200 --limit 100
    ```
    결과 `.seed/seed.json` 에 테스트 계정 비밀번호가 있으니 커밋하지 않는다(.gitignore).
 
 ## 실행
 
 ```sh
-export BASE_URL=http://localhost:8080
+export BASE_URL=http://localhost:9080
 
 # 1. 방송 시작 폭주. 다른 터미널에서 SSE 연결을 같이 연다.
 node tests/performance/k6/sse-holder.mjs --count 200 --ramp 30 --hold 180 &
@@ -59,7 +59,7 @@ node tests/performance/k6/sse-holder.mjs --count 200 --ramp 30 --hold 180 &
 
 | 이름 | 기본값 | 뜻 |
 |---|---|---|
-| `BASE_URL` | `http://localhost:8080` | Gateway 입구 |
+| `BASE_URL` | `http://localhost:9080` | Gateway 입구 |
 | `USERS` | 50 | 동시 시청자(VU) 수 = 알림 신청자 수와 맞추는 게 자연스럽다 |
 | `RAMP` / `HOLD` | 30s / 3m | 유입 시간 / 유지 시간 |
 | `HEARTBEAT_INTERVAL` | 15 | 초. Frontend 와 같은 값 |

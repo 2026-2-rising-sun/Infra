@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 부하 테스트용 데이터를 만든다. Node 22 이상, 외부 패키지 없음.
 //
-//   node tests/performance/k6/seed.mjs --base http://localhost:8080 --users 200 --limit 100
+//   node tests/performance/k6/seed.mjs --base http://localhost:9080 --users 200 --limit 100
 //
 // 만드는 것
 //   1) 테스트 사용자 N 명: loadtest-<n>@load.test (회원가입 API). 이미 있으면 그대로 쓴다.
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 
 const args = parse(process.argv.slice(2));
-const BASE = (args.base || process.env.BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
+const BASE = (args.base || process.env.BASE_URL || 'http://localhost:9080').replace(/\/$/, '');
 const USERS = Number(args.users || 50);
 const LIMIT = Number(args.limit || Math.max(1, Math.floor(USERS / 2)));
 const CONCURRENCY = Number(args.concurrency || 10);
