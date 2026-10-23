@@ -16,6 +16,7 @@ spec:
   template:
     metadata:
       labels:
+        app: member-service   # 관측 스택(observability/local)이 이 라벨로 파드를 고른다
         app.kubernetes.io/name: member-service
         app.kubernetes.io/part-of: shoppinglive
     spec:

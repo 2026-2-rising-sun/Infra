@@ -22,4 +22,17 @@ KUBE_CONTEXT=kind-other ./platform/kind/install.sh
 - AWS 에서는 같은 차트를 쓰되 EnvoyProxy 를 NLB 용으로 바꾸고 ArgoCD 가 설치한다(terraform/argocd 단계).
 - 팀 체험 환경(`make setup`, 클러스터 `shoppinglive-team`)은 아직 Frontend 의 스크립트가 Kafka 를 직접 띄운다. 그쪽 전환은 별도 작업이다.
 
+## 서비스 이미지 (`build-images.sh`)
+
+`k8s/base` 의 Deployment 는 `ghcr.io/2026-2-rising-sun/<service>-service` 를 가리키지만 CI 가 아직 이미지를 올리지 않는다.
+로컬에서는 Backend 레포의 Dockerfile 로 직접 만들어 `:local` 태그로 kind 에 적재하고, `k8s/overlays/dev` 가 그 태그를 쓴다.
+
+```sh
+./platform/kind/build-images.sh                       # 5개 전부. Backend 는 Infra 옆 ../Backend 로 가정
+BACKEND_DIR=~/src/Backend ./platform/kind/build-images.sh live notification   # 일부만, 위치 지정
+```
+
+- 빌드는 Backend `services/<service>/Dockerfile` 그대로(멀티스테이지, 컨테이너 안 Gradle). 첫 빌드는 서비스당 수 분, 이후는 캐시.
+- 빌드한 이미지 위에 OTel javaagent(v2.20.0, 체크섬 고정) 를 `/otel/agent.jar` 로 한 겹 더 얹는다. dev overlay 의 `otel-agent-env.yaml` 이 그 경로로 `-javaagent` 를 건다. 관측 스택(`observability/local/deploy.py`)의 trace 가 이걸로 들어온다.
+- 코드를 바꿨으면 다시 실행한 뒤 `kubectl -n shoppinglive-dev rollout restart deploy/dev-<service>-service`.
 관측 설정 생성 시 `python3 observability/local/deploy.py --app-namespace shoppinglive-dev`를 사용한다. dev의 Kafka exporter는 Strimzi의 `kafka-kafka-bootstrap`에 연결한다. 기존 팀 환경은 `kafka`를 유지하며 `--kafka-service`로 변경할 수 있다.
