@@ -1,0 +1,33 @@
+# 5개 백엔드 서비스의 단일 진입점 (Gateway API).
+#
+# 전제
+#   - 클러스터에 Gateway API CRD 와 Envoy Gateway 컨트롤러가 설치돼 있어야 한다
+#     (GatewayClass envoy-gateway 는 platform/kind/components 가 만든다. 클러스터 범위 리소스라 여기 두지 않는다).
+#   - 이전의 Ingress + ingress-nginx 구성을 대체한다. ingress-nginx 는 2026-03 에 은퇴해 보안 패치가 없고,
+#     rewrite-target 같은 nginx 전용 annotation 은 다른 컨트롤러로 옮길 수 없었다.
+#   - 별도 API 게이트웨이 서비스를 두지 않는다. Frontend 는 이 Gateway 하나만 바라보고,
+#     경로 앞부분(/api/<도메인>)으로 어느 서비스에 갈지 결정된다. 규칙은 서비스별 HTTPRoute 에 있다.
+#
+# 역할 분리
+#   Gateway   = 입구(포트·호스트·인증서). 인프라 담당이 관리한다.
+#   HTTPRoute = 경로 규칙. 서비스마다 파일 하나라 각 서비스 담당이 자기 것만 고친다.
+#
+# TLS 는 여기서 끝내지 않는다. AWS 에서는 CloudFront → NLB 가 TLS 를 맡고 클러스터 안은 HTTP 다.
+# 로컬 kind 도 HTTP 뿐이다. 그래서 리스너는 80 하나다.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: shoppinglive
+  labels:
+    app.kubernetes.io/name: shoppinglive
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  gatewayClassName: envoy-gateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      # TODO: 실제 도메인이 정해지면 hostname 을 지정한다. 지금은 호스트 무관하게 매칭된다.
+      allowedRoutes:
+        namespaces:
+          from: Same

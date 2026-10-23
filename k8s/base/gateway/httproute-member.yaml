@@ -1,0 +1,26 @@
+# /api/member/** -> member-service:8080. 접두사 /api/member 는 떼고 넘긴다.
+# 예) GET /api/member/v1/x -> member-service 는 /v1/x 로 받는다. (로컬 vite.config.ts 프록시와 같은 계약)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: member
+  labels:
+    app.kubernetes.io/name: member-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  parentRefs:
+    - name: shoppinglive
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/member
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: member-service
+          port: 8080

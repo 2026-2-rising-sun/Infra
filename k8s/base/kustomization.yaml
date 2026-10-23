@@ -9,4 +9,4 @@ resources:
   - commerce-service
   - live-service
   - notification-service
-  - ingress.yaml
+  - gateway

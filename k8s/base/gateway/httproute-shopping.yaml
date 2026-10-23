@@ -1,0 +1,26 @@
+# /api/shopping/** -> shopping-service:8080. 접두사 /api/shopping 는 떼고 넘긴다.
+# 예) GET /api/shopping/v1/x -> shopping-service 는 /v1/x 로 받는다. (로컬 vite.config.ts 프록시와 같은 계약)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: shopping
+  labels:
+    app.kubernetes.io/name: shopping-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  parentRefs:
+    - name: shoppinglive
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/shopping
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: shopping-service
+          port: 8080
