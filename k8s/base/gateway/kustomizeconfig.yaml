@@ -1,0 +1,12 @@
+# kustomize 는 Ingress 의 backend.service.name 은 알아서 prefix 를 따라가지만
+# Gateway API 리소스는 모른다. overlay 가 namePrefix(dev-)를 붙이면 HTTPRoute 가 가리키는
+# Service·Gateway 이름도 같이 바뀌어야 하므로 여기서 참조 경로를 알려 준다.
+nameReference:
+  - kind: Service
+    fieldSpecs:
+      - kind: HTTPRoute
+        path: spec/rules/backendRefs/name
+  - kind: Gateway
+    fieldSpecs:
+      - kind: HTTPRoute
+        path: spec/parentRefs/name

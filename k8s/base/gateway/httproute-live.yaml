@@ -1,0 +1,30 @@
+# /api/live/** -> live-service:8080. 접두사 /api/live 는 떼고 넘긴다.
+# 예) GET /api/live/v1/x -> live-service 는 /v1/x 로 받는다. (로컬 vite.config.ts 프록시와 같은 계약)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: live
+  labels:
+    app.kubernetes.io/name: live-service
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  parentRefs:
+    - name: shoppinglive
+  rules:
+    # SSE 는 응답이 방송이 끝날 때까지 열려 있다. Envoy 의 라우트 요청 타임아웃(기본 15초)에 걸리면
+    # 연결이 끊기므로 live 만 요청 타임아웃을 끈다(0s = 비활성). 유휴 타임아웃은 heartbeat(15초)가 막는다.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/live
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      timeouts:
+        request: 0s
+      backendRefs:
+        - name: live-service
+          port: 8080
