@@ -35,3 +35,4 @@ BACKEND_DIR=~/src/Backend ./platform/kind/build-images.sh live notification   # 
 - 빌드는 Backend `services/<service>/Dockerfile` 그대로(멀티스테이지, 컨테이너 안 Gradle). 첫 빌드는 서비스당 수 분, 이후는 캐시.
 - 빌드한 이미지 위에 OTel javaagent(v2.20.0, 체크섬 고정) 를 `/otel/agent.jar` 로 한 겹 더 얹는다. dev overlay 의 `otel-agent-env.yaml` 이 그 경로로 `-javaagent` 를 건다. 관측 스택(`observability/local/deploy.py`)의 trace 가 이걸로 들어온다.
 - 코드를 바꿨으면 다시 실행한 뒤 `kubectl -n shoppinglive-dev rollout restart deploy/dev-<service>-service`.
+관측 설정 생성 시 `python3 observability/local/deploy.py --app-namespace shoppinglive-dev`를 사용한다. dev의 Kafka exporter는 Strimzi의 `kafka-kafka-bootstrap`에 연결한다. 기존 팀 환경은 `kafka`를 유지하며 `--kafka-service`로 변경할 수 있다.
