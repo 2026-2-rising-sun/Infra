@@ -72,7 +72,8 @@ def manifest(args, kubelets=(), ca_bundle=""):
         if extra: pod.update(extra)
         add('Deployment', name, spec=dict(replicas=1, strategy={'type':'Recreate'}, selector=dict(matchLabels={'app':name}), template=dict(metadata=dict(labels={'app':name},annotations={'shoppinglive/config':hashlib.sha256(json.dumps([i for i in items if i['kind']=='ConfigMap' and i['metadata']['name'].startswith(name+'-')],sort_keys=True).encode()).hexdigest()}),spec=pod)))
         add('Service', name, spec=dict(selector={'app':name},ports=[dict(name='p'+str(p),port=p,targetPort=p) for p in ports]))
-    workload('prometheus','prom/prometheus:v3.5.0',[9090],['--config.file=/etc/prometheus/prometheus.yml','--storage.tsdb.path=/data','--storage.tsdb.retention.time=24h','--storage.tsdb.retention.size=1GB'], {'prometheus.yml':'/etc/prometheus/prometheus.yml','alerts.yml':'/etc/prometheus/alerts.yml'}, storage=True,memory='384Mi')
+    # remote write 수신은 k6 결과(tests/performance/k6)를 같은 Prometheus 에 넣기 위한 것이다. 로컬 전용이라 인증은 없다.
+    workload('prometheus','prom/prometheus:v3.5.0',[9090],['--config.file=/etc/prometheus/prometheus.yml','--storage.tsdb.path=/data','--storage.tsdb.retention.time=24h','--storage.tsdb.retention.size=1GB','--web.enable-remote-write-receiver'], {'prometheus.yml':'/etc/prometheus/prometheus.yml','alerts.yml':'/etc/prometheus/alerts.yml'}, storage=True,memory='384Mi')
     prometheus = next(i for i in items if i['kind']=='Deployment' and i['metadata']['name']=='prometheus')
     template = prometheus['spec']['template']
     template['metadata']['annotations']['shoppinglive/kubelet-tls'] = hashlib.sha256((ca_bundle+json.dumps(kubelets)).encode()).hexdigest()
