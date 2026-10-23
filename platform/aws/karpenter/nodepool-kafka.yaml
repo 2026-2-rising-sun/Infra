@@ -1,0 +1,47 @@
+# Kafka 브로커 전용 풀. 온디맨드만, taint 로 다른 파드가 못 올라오게 막는다.
+#
+# 브로커는 디스크(EBS)가 AZ 에 묶이고 복제 3 이 AZ 마다 하나씩 있어야 의미가 있다.
+# 스팟이 회수되면 브로커가 재시작되며 파티션 리더가 옮겨가 발행 지연이 튄다. 부하 테스트 측정값을 흔들기 때문에 온디맨드로 둔다.
+# Strimzi Kafka CR 쪽에서 nodeSelector/toleration 을 workload=kafka 로 맞춘다(1단계 담당).
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: kafka
+spec:
+  template:
+    metadata:
+      labels:
+        shoppinglive.io/node-role: kafka
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      taints:
+        - key: workload
+          value: kafka
+          effect: NoSchedule
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["arm64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["m", "r"]
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["6"]
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["large"]
+      expireAfter: Never # 브로커 노드는 스스로 갈지 않는다. 교체는 Strimzi 롤링으로 사람이 결정한다
+  limits:
+    cpu: "6"
+    memory: 24Gi
+  disruption:
+    # 비었을 때만 회수한다. 덜 찼다고 브로커를 옮기지 않는다.
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 5m

@@ -1,0 +1,17 @@
+# Karpenter Helm values. __CLUSTER_NAME__, __INTERRUPTION_QUEUE__ 는 install.sh 가 치환한다.
+settings:
+  clusterName: __CLUSTER_NAME__
+  interruptionQueue: __INTERRUPTION_QUEUE__
+serviceAccount:
+  name: karpenter # modules/karpenter 의 Pod Identity 연결 이름과 같아야 한다
+# 컨트롤러는 자기가 만든 노드 위에 올라가면 안 되므로 시스템 노드 그룹에 고정한다.
+nodeSelector:
+  shoppinglive.io/node-role: system
+replicas: 1
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
