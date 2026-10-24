@@ -1,0 +1,6 @@
+# cp backend.hcl.example backend.hcl 후 bucket 을 terraform/bootstrap 의 output 값으로 바꾼다.
+bucket         = "shoppinglive-tfstate-<AWS 계정 ID>"
+key            = "envs/dev/terraform.tfstate"
+region         = "ap-northeast-2"
+dynamodb_table = "shoppinglive-tfstate-lock"
+encrypt        = true

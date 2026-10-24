@@ -1,0 +1,29 @@
+# Karpenter 가 만들 EC2 의 공통 사양. NodePool 두 개(app, kafka)가 같이 쓴다.
+# __CLUSTER_NAME__, __NODE_ROLE__ 은 platform/aws/install.sh 가 Terraform output 으로 치환한다.
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  # AL2023 arm64. 시스템 노드 그룹과 같은 계열이라 이미지·커널 문제를 한 번만 겪는다.
+  amiSelectorTerms:
+    - alias: al2023@latest
+  role: __NODE_ROLE__
+  # 서브넷·보안그룹은 Terraform 이 붙인 karpenter.sh/discovery 태그로 찾는다(프라이빗 서브넷, 클러스터 기본 보안그룹).
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: __CLUSTER_NAME__
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: __CLUSTER_NAME__
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 40Gi
+        volumeType: gp3
+        deleteOnTermination: true
+  metadataOptions:
+    httpTokens: required # IMDSv2 강제
+    httpPutResponseHopLimit: 1
+  tags:
+    shoppinglive.io/managed-by: karpenter
