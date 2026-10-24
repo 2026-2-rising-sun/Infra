@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - 'terraform/**'
+      - 'platform/aws/**'
       - '.github/workflows/terraform-validate.yml'
 
 permissions:
@@ -45,3 +46,9 @@ jobs:
 
       - name: AWS 호출 없이 모듈 회귀 검사
         run: terraform -chdir=terraform/tests test
+
+      - name: SPA 경로 회귀 검사
+        run: node --test terraform/tests/*.test.cjs
+
+      - name: 오리진 검증 정책 회귀 검사
+        run: python3 -m unittest discover -s platform/aws/envoy-gateway -p 'test_*.py'

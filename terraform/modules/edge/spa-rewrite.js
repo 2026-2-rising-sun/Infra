@@ -3,9 +3,7 @@
 function handler(event) {
   var request = event.request;
   var uri = request.uri;
-  if (uri.endsWith('/')) {
-    request.uri = uri + 'index.html';
-  } else if (!uri.includes('.')) {
+  if (uri.endsWith('/') || !uri.split('/').pop().includes('.')) {
     request.uri = '/index.html';
   }
   return request;
