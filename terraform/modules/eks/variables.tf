@@ -16,7 +16,12 @@ variable "private_subnet_ids" {
 variable "public_access_cidrs" {
   description = "퍼블릭 API 엔드포인트에 접근할 수 있는 CIDR. 작업자 IP 로 좁힌다"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  validation {
+    condition = length(var.public_access_cidrs) > 0 && alltrue([
+      for cidr in var.public_access_cidrs : can(cidrhost(cidr, 0)) && !endswith(cidr, "/0")
+    ])
+    error_message = "EKS 공개 API에 접근할 작업자 CIDR을 명시해야 하며 전체 인터넷(/0)은 허용하지 않는다."
+  }
 }
 
 variable "system_instance_types" {
