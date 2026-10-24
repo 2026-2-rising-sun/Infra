@@ -1,0 +1,26 @@
+# AWS 에서 Gateway(k8s/base, 1단계)에 덧붙일 kustomize 패치 예시.
+#
+# 1. 443 리스너: NLB 가 TLS 를 끝내고 443 으로 평문 HTTP 를 보내므로 protocol 은 HTTP 다.
+#    HTTPRoute 는 parentRefs 에 sectionName 을 안 쓰면 두 리스너(80, 443)에 모두 붙는다.
+# 2. infrastructure.parametersRef: envoyproxy-nlb.yaml 의 EnvoyProxy 를 가리킨다.
+#
+# AWS overlay(k8s/overlays/<env>)에서 아래처럼 쓴다:
+#   patches:
+#     - path: ../../../platform/aws/envoy-gateway/gateway-aws-patch.yaml
+#       target: { kind: Gateway, name: shoppinglive }
+- op: add
+  path: /spec/listeners/-
+  value:
+    name: nlb-tls-terminated
+    port: 443
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: Same
+- op: add
+  path: /spec/infrastructure
+  value:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: nlb

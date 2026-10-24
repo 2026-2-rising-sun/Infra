@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - 'terraform/**'
+      - 'platform/aws/**'
       - '.github/workflows/terraform-validate.yml'
 
 permissions:
@@ -39,9 +40,16 @@ jobs:
             dir="$(dirname "$root")"
             echo "::group::$dir"
             terraform -chdir="$dir" init -backend=false -input=false
-            terraform -chdir="$dir" validate
+            # 테스트의 mock 별칭은 test 단계에서 해석한다. 구성 검증은 별도로 수행한다.
+            terraform -chdir="$dir" validate -no-tests
             echo "::endgroup::"
           done
 
       - name: AWS 호출 없이 모듈 회귀 검사
         run: terraform -chdir=terraform/tests test
+
+      - name: SPA 경로 회귀 검사
+        run: node --test terraform/tests/*.test.cjs
+
+      - name: 오리진 검증 정책 회귀 검사
+        run: python3 -m unittest discover -s platform/aws/envoy-gateway -p 'test_*.py'
