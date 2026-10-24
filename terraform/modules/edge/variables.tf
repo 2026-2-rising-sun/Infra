@@ -34,6 +34,10 @@ variable "origin_verify_secret" {
   description = "CloudFront 가 오리진 요청에 붙이는 X-Origin-Verify 값. Envoy 가 같은 값을 검사한다"
   type        = string
   sensitive   = true
+  validation {
+    condition     = length(var.origin_verify_secret) >= 32 && can(regex("^[A-Za-z0-9_-]+$", var.origin_verify_secret))
+    error_message = "오리진 검증 값은 32자 이상의 영문·숫자·밑줄·하이픈으로 지정한다."
+  }
 }
 
 variable "rate_limit_per_5min" {

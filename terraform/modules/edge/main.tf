@@ -85,19 +85,14 @@ resource "aws_acm_certificate" "edge" {
 }
 
 resource "aws_route53_record" "edge_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.edge.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
+  # 단일 도메인이므로 인스턴스 키는 입력으로 고정하고 DNS 값만 인증서 발급 결과에서 읽는다.
+  for_each = toset([var.domain_name])
 
   zone_id         = var.hosted_zone_id
-  name            = each.value.name
-  type            = each.value.type
+  name            = one([for dvo in aws_acm_certificate.edge.domain_validation_options : dvo.resource_record_name if dvo.domain_name == each.value])
+  type            = "CNAME"
   ttl             = 60
-  records         = [each.value.record]
+  records         = [one([for dvo in aws_acm_certificate.edge.domain_validation_options : dvo.resource_record_value if dvo.domain_name == each.value])]
   allow_overwrite = true
 }
 
@@ -119,19 +114,14 @@ resource "aws_acm_certificate" "origin" {
 }
 
 resource "aws_route53_record" "origin_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.origin.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
+  # 단일 도메인이므로 인스턴스 키는 입력으로 고정하고 DNS 값만 인증서 발급 결과에서 읽는다.
+  for_each = toset([local.api_origin_hostname])
 
   zone_id         = var.hosted_zone_id
-  name            = each.value.name
-  type            = each.value.type
+  name            = one([for dvo in aws_acm_certificate.origin.domain_validation_options : dvo.resource_record_name if dvo.domain_name == each.value])
+  type            = "CNAME"
   ttl             = 60
-  records         = [each.value.record]
+  records         = [one([for dvo in aws_acm_certificate.origin.domain_validation_options : dvo.resource_record_value if dvo.domain_name == each.value])]
   allow_overwrite = true
 }
 
@@ -329,7 +319,7 @@ resource "aws_route53_record" "apex" {
 
 # NLB 가 생긴 뒤에만 만들어진다. 그 전엔 /api/* 가 CloudFront 에서 502 로 떨어진다.
 resource "aws_route53_record" "api_origin" {
-  count = var.nlb_dns_name == null ? 0 : 1
+  count = var.nlb_dns_name == null ? 0 : (trimspace(var.nlb_dns_name) == "" ? 0 : 1)
 
   zone_id = var.hosted_zone_id
   name    = local.api_origin_hostname

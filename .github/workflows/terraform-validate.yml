@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - 'terraform/**'
+      - 'platform/aws/**'
       - '.github/workflows/terraform-validate.yml'
 
 permissions:
@@ -30,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          roots=(terraform/envs/*/main.tf)
+          roots=(terraform/bootstrap/main.tf terraform/envs/*/main.tf terraform/tests/main.tf)
           if [ ${#roots[@]} -eq 0 ]; then
             echo "No terraform root modules under terraform/envs — nothing to validate"
             exit 0
@@ -42,3 +43,12 @@ jobs:
             terraform -chdir="$dir" validate
             echo "::endgroup::"
           done
+
+      - name: AWS 호출 없이 모듈 회귀 검사
+        run: terraform -chdir=terraform/tests test
+
+      - name: SPA 경로 회귀 검사
+        run: node --test terraform/tests/*.test.cjs
+
+      - name: 오리진 검증 정책 회귀 검사
+        run: python3 -m unittest discover -s platform/aws/envoy-gateway -p 'test_*.py'

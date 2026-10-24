@@ -19,3 +19,7 @@ S3(비공개, OAC) + CloudFront + WAF + ACM 두 장 + Route 53. 설계안 3.1 �
 2. `kubectl -n envoy-gateway-system get svc` 로 NLB 주소를 읽어 `nlb_dns_name` 에 넣고 다시 apply 한다. CNAME 한 줄만 추가된다.
 
 `make aws-up` 이 이 순서를 자동으로 한다.
+
+## 오리진 검증 연결
+
+헤더 전송만으로 접근 제한이 완성되지 않는다. `platform/aws/envoy-gateway/origin-policy.py`가 Terraform output JSON을 표준입력으로 받아 Gateway `shoppinglive`용 SecurityPolicy를 만든다. 설치 스크립트에서 Gateway 공개 전에 적용한다. 비밀값은 최소 32자 난수로 지정하고, Terraform state와 Kubernetes SecurityPolicy 조회 권한을 제한한다. 실제 허용·거부 응답은 AWS 배포 후 별도 검증한다.

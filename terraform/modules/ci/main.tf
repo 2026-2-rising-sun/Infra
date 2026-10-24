@@ -2,7 +2,7 @@
 #
 # Actions 는 실행마다 GitHub 이 서명한 짧은 토큰을 받고, AWS 는 그 토큰을 믿고 역할을 빌려준다.
 # 리포지토리 시크릿에 AWS 키를 넣는 방식은 키가 새면 끝이라 쓰지 않는다.
-# 신뢰 조건의 sub 는 `repo:<org>/<repo>:*` 로 좁혀 다른 조직의 워크플로가 이 역할을 못 쓰게 한다.
+# 신뢰 조건의 sub 는 지정한 저장소의 배포 브랜치로 제한해 PR 토큰과 임의 브랜치가 배포 권한을 받지 못하게 한다.
 
 data "aws_partition" "current" {}
 
@@ -26,9 +26,9 @@ data "aws_iam_policy_document" "assume" {
       values   = ["sts.amazonaws.com"]
     }
     condition {
-      test     = "StringLike"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [for repo in var.github_repositories : "repo:${repo}:*"]
+      values   = flatten([for repo in var.github_repositories : [for ref in var.github_refs : "repo:${repo}:ref:${ref}"]])
     }
   }
 }
