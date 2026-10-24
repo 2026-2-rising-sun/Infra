@@ -22,3 +22,5 @@ steps:
       role-to-assume: <terraform output github_actions_role_arn>
       aws-region: ap-northeast-2
 ```
+
+배포 신뢰 조건은 `github_refs`의 정확한 브랜치(default dev/main)만 허용한다. PR·임의 브랜치·GitHub Environment 토큰은 자동으로 허용하지 않는다. 배포 워크플로를 연결할 때 해당 브랜치 보호와 실제 OIDC 토큰을 별도로 검증한다.
