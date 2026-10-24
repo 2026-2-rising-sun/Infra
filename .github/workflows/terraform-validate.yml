@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          roots=(terraform/envs/*/main.tf)
+          roots=(terraform/bootstrap/main.tf terraform/envs/*/main.tf terraform/tests/main.tf)
           if [ ${#roots[@]} -eq 0 ]; then
             echo "No terraform root modules under terraform/envs — nothing to validate"
             exit 0
@@ -42,3 +42,6 @@ jobs:
             terraform -chdir="$dir" validate
             echo "::endgroup::"
           done
+
+      - name: AWS 호출 없이 모듈 회귀 검사
+        run: terraform -chdir=terraform/tests test

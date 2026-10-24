@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 umask 077
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 target=${1:-"$script_dir/.env"}
 if [ -e "$target" ]; then
   printf '%s\n' "Refusing to overwrite existing environment: $target" >&2

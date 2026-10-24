@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | 10 | Gateway API CRD (experimental 채널) | v1.6.1 | - | `k8s/base/gateway/` 의 Gateway·HTTPRoute 타입 |
 | 20 | Envoy Gateway + GatewayClass `envoy-gateway` | v1.9.2 | `envoy-gateway-system` | Gateway API 를 실제 Envoy 프록시로 구현. ingress-nginx(2026-03 은퇴) 대체 |
+| 35 | Metrics Server | v0.8.1 | `kube-system` | CPU 기반 HPA의 `metrics.k8s.io` 제공. Kubernetes 1.31 이상 |
 | 30 | Strimzi 오퍼레이터 | 1.3.0 | `strimzi-system` | `k8s/overlays/dev/datatier/kafka.yaml` 의 Kafka·KafkaTopic CR 처리 |
 
 ```sh
@@ -35,3 +36,6 @@ BACKEND_DIR=~/src/Backend ./platform/kind/build-images.sh live notification   # 
 - 빌드는 Backend `services/<service>/Dockerfile` 그대로(멀티스테이지, 컨테이너 안 Gradle). 첫 빌드는 서비스당 수 분, 이후는 캐시.
 - 빌드한 이미지 위에 OTel javaagent(v2.20.0, 체크섬 고정) 를 `/otel/agent.jar` 로 한 겹 더 얹는다. dev overlay 의 `otel-agent-env.yaml` 이 그 경로로 `-javaagent` 를 건다. 관측 스택(`observability/local/deploy.py`)의 trace 가 이걸로 들어온다.
 - 코드를 바꿨으면 다시 실행한 뒤 `kubectl -n shoppinglive-dev rollout restart deploy/dev-<service>-service`.
+관측 설정 생성 시 `python3 observability/local/deploy.py --app-namespace shoppinglive-dev`를 사용한다. dev의 Kafka exporter는 Strimzi의 `kafka-kafka-bootstrap`에 연결한다. 기존 팀 환경은 `kafka`를 유지하며 `--kafka-service`로 변경할 수 있다.
+
+Metrics Server는 kind의 자체 서명 kubelet 인증서에 한해 인증서 검증을 생략한다. `platform/kind/metrics-server`는 로컬 전용이며 운영에 재사용하지 않는다. CPU 기반 확장은 35번 설치와 Metrics API 준비 완료가 필요하다.

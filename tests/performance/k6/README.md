@@ -85,3 +85,5 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/xk6" grafana/xk6 build --with g
 
 - 로컬 kind: 노트북에서. 파드 수 변화·랙 해소·에러율은 볼 수 있지만 노드가 고정이라 Karpenter 는 못 본다. 노트북 자체가 병목이 되면 USERS 를 낮춘다.
 - AWS: 클러스터 밖 EC2 1대에서 CloudFront 를 거쳐 돌린다. 같은 스크립트에 `BASE_URL` 만 바꾼다.
+
+쿠폰 드롭은 200·201 및 계약의 409 CONFLICT만 허용한다. 이미 발급받은 VU의 재요청은 200이어야 하며, 201 합계가 시드의 `couponLimit`을 넘으면 실패한다. 409는 기간 오류와 수량 소진을 구분하지 않으므로 유효 기간 안의 새 시드를 사용해야 한다.
