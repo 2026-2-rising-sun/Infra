@@ -23,3 +23,13 @@ variable "cloudfront_distribution_arn" {
   description = "배포 후 무효화할 CloudFront 배포 ARN"
   type        = string
 }
+
+variable "github_refs" {
+  description = "배포 역할을 허용할 정확한 Git 브랜치 ref. PR·와일드카드는 허용하지 않는다"
+  type        = list(string)
+  default     = ["refs/heads/dev", "refs/heads/main"]
+  validation {
+    condition     = length(var.github_refs) > 0 && alltrue([for ref in var.github_refs : startswith(ref, "refs/heads/") && !strcontains(ref, "*") && !strcontains(ref, "?")])
+    error_message = "배포 브랜치의 정확한 refs/heads/ 경로를 지정해야 한다."
+  }
+}
