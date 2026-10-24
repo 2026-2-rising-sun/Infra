@@ -1,0 +1,41 @@
+# KEDA. ScaledObject 는 앱 overlay(k8s/overlays/<env>/scaling)에 있다. 3단계 platform/kind/components/40-keda.sh 와 같은 값.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keda
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+
+  source:
+    repoURL: ghcr.io/kedacore/charts
+    chart: keda
+    targetRevision: 2.21.0
+    helm:
+      valuesObject:
+        nodeSelector:
+          shoppinglive.io/node-role: system
+        # 3단계 kind 스크립트와 같은 요청량
+        resources:
+          operator:
+            requests: { cpu: 50m, memory: 128Mi }
+          metricServer:
+            requests: { cpu: 50m, memory: 128Mi }
+          webhooks:
+            requests: { cpu: 20m, memory: 64Mi }
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keda
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

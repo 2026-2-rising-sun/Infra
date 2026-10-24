@@ -1,0 +1,16 @@
+# cp terraform.tfvars.example terraform.tfvars 후 값을 채운다. terraform.tfvars 는 git 에 넣지 않는다.
+
+domain_name    = "shoppinglive.example.com"
+hosted_zone_id = "Z0123456789ABCDEFGHIJ"
+bucket_suffix  = "123456" # 계정 ID 뒤 6자리 등 유일한 값
+
+# openssl rand -hex 32
+origin_verify_secret = "바꿔야-함"
+
+budget_alert_email = "you@example.com"
+
+# 자기 공인 IP 로 좁힌다: curl -s https://checkip.amazonaws.com
+eks_public_access_cidrs = ["192.0.2.1/32"] # 문서용 IP. 실제 작업자 IP로 교체
+
+# 클러스터·Gateway 를 올린 뒤 NLB 주소를 넣고 두 번째 apply (make aws-up 이 자동으로 한다)
+# nlb_dns_name = "k8s-envoygat-xxxx.elb.ap-northeast-2.amazonaws.com"

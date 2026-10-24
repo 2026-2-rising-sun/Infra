@@ -1,0 +1,26 @@
+# AWS 플랫폼만 설치한다. 로컬 dev/perf/demo 앱은 AWS에 배포하지 않는다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-aws-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+
+  source:
+    repoURL: https://github.com/2026-2-rising-sun/Infra.git
+    targetRevision: main
+    path: argocd/applications/platform
+    directory:
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
