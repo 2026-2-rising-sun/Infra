@@ -1,12 +1,8 @@
-# App of Apps 의 뿌리. 이 하나만 손으로 apply 하면 argocd/applications/ 아래 Application 을 ArgoCD 가 읽어 나머지를 만든다.
-#
-# 디렉터리를 재귀로 읽으므로 applications/platform/*.yaml(Helm 차트)과 applications/{dev,perf,demo}/*.yaml(kustomize)이 모두 올라간다.
-# 새 환경이나 부품을 추가할 때는 그 디렉터리에 Application YAML 을 넣고 main 에 머지하면 된다.
-# 루트 앱은 자동 동기화·자동 정리(prune)라 Application 파일을 지우면 그 앱도 지워진다(앱이 만든 리소스는 각 앱의 prune 설정을 따른다).
+# AWS 플랫폼만 설치한다. 로컬 dev/perf/demo 앱은 AWS에 배포하지 않는다.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root
+  name: root-aws-platform
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -16,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/2026-2-rising-sun/Infra.git
     targetRevision: main
-    path: argocd/applications
+    path: argocd/applications/platform
     directory:
       recurse: true
 

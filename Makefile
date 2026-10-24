@@ -18,7 +18,7 @@ aws-bootstrap:
 # 전체 생성: terraform apply → 클러스터 부품 설치 → NLB 를 CloudFront 에 연결. 약 30분, 시간당 약 $0.7.
 aws-up:
 	bash platform/aws/up.sh
-# 전체 삭제: LoadBalancer Service·NodePool 먼저 비우고 destroy. 상태 저장소와 ECR 이미지는 남는다.
+# 전체 삭제: LoadBalancer Service·NodePool 먼저 비우고 destroy. 별도 상태 저장소만 남는다. RDS 데이터·ECR 이미지도 삭제한다.
 aws-down:
 	bash platform/aws/down.sh
 argocd-ui:

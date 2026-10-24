@@ -1,6 +1,6 @@
 # argocd
 
-GitOps 배포 정의. App of Apps 구조로, 루트 Application 하나를 apply 하면 나머지는 ArgoCD 가 main 브랜치를 읽어 만든다.
+GitOps 배포 정의. App of Apps 구조로, AWS 루트 Application은 플랫폼 부품만 main 브랜치에서 읽어 만든다. 로컬 앱 디렉터리는 자동 배포 대상이 아니다.
 
 ```
 argocd/
@@ -8,7 +8,7 @@ argocd/
 ├── projects/
 │   ├── shoppinglive-project.yaml        # 앱 경계: 이 레포, shoppinglive-* 네임스페이스, 클러스터 범위는 Namespace 만
 │   └── platform-project.yaml            # 플랫폼 경계: 외부 Helm 저장소, CRD·ClusterRole 허용
-└── applications/                        # 루트가 재귀로 읽는다
+└── applications/                        # AWS 루트는 platform 하위만 읽는다
     ├── platform/{envoy-gateway,strimzi,keda}.yaml   # Helm 차트. 버전은 platform/kind/components 와 같다
     └── {dev,perf,demo}/shoppinglive.yaml            # k8s/overlays/<env> (kustomize)
 ```
@@ -28,4 +28,4 @@ ArgoCD 자체는 Helm 으로 설치한다(`platform/aws/install.sh`, values 는 
 
 - `destination.server` 는 ArgoCD 가 자기 클러스터에 배포하므로 in-cluster 기본값 그대로 둔다.
 - `k8s/overlays/<env>` 의 `images` 가 ECR 주소를 가리켜야 한다(`terraform output ecr_repository_urls`).
-- 앱 Secret(JWT 키, 서비스 토큰)은 git 에 없다. AWS 에서는 Secrets Manager → External Secrets 로 공급하는 것이 후속 과제이고, 그 전까지는 `k8s/local/auth-secrets.sh` 를 EKS 컨텍스트에서 한 번 돌린다.
+- AWS 전용 앱 overlay와 Secret 공급을 준비한 뒤 앱 배포를 별도로 연결한다. 로컬 overlay를 EKS에 그대로 적용하지 않는다.

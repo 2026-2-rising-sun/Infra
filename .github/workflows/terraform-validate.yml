@@ -40,15 +40,23 @@ jobs:
             dir="$(dirname "$root")"
             echo "::group::$dir"
             terraform -chdir="$dir" init -backend=false -input=false
-            terraform -chdir="$dir" validate
+            # 테스트의 mock 별칭은 test 단계에서 해석한다. 구성 검증은 별도로 수행한다.
+            terraform -chdir="$dir" validate -no-tests
             echo "::endgroup::"
           done
 
       - name: AWS 호출 없이 모듈 회귀 검사
-        run: terraform -chdir=terraform/tests test
+        run: |
+          terraform -chdir=terraform/tests test
+          terraform -chdir=terraform/envs/dev test
 
       - name: SPA 경로 회귀 검사
         run: node --test terraform/tests/*.test.cjs
 
       - name: 오리진 검증 정책 회귀 검사
         run: python3 -m unittest discover -s platform/aws/envoy-gateway -p 'test_*.py'
+
+      - name: AWS 스크립트 실패 경로 검사 (외부 명령 모의 실행)
+        run: |
+          for script in platform/aws/*.sh; do bash -n "$script"; done
+          python3 -m unittest discover -s platform/aws -p 'test_*.py'

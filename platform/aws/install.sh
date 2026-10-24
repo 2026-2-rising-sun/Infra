@@ -13,15 +13,11 @@
 # 전제: aws CLI 로그인, helm, kubectl, terraform. Terraform output 은 terraform/envs/dev 에서 읽는다.
 set -euo pipefail
 
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-TF_DIR="$ROOT/terraform/envs/dev"
-APP_NAMESPACE=${APP_NAMESPACE:-shoppinglive-dev}
-
+source "$(dirname "$0")/common.sh"
 LB_CONTROLLER_CHART_VERSION=3.6.1   # https://github.com/aws/eks-charts stable/aws-load-balancer-controller
 KARPENTER_VERSION=1.15.0            # https://github.com/aws/karpenter-provider-aws
 ARGOCD_CHART_VERSION=10.10.5        # https://github.com/argoproj/argo-helm charts/argo-cd
 
-tf_out() { terraform -chdir="$TF_DIR" output -raw "$1"; }
 
 # __KEY__ 자리를 Terraform output 으로 바꿔 stdout 으로 낸다. envsubst 는 macOS 기본에 없어서 sed 를 쓴다.
 render() {
@@ -39,8 +35,7 @@ render() {
 
 step() { printf '\n==> %s\n' "$*"; }
 
-CLUSTER_NAME=$(tf_out cluster_name)
-AWS_REGION=$(tf_out aws_region)
+aws_context
 NODE_ROLE=$(tf_out karpenter_node_role_name)
 INTERRUPTION_QUEUE=$(tf_out karpenter_interruption_queue)
 NLB_SECURITY_GROUP=$(tf_out nlb_security_group_id)
@@ -48,11 +43,10 @@ ORIGIN_CERTIFICATE_ARN=$(tf_out origin_certificate_arn)
 VPC_ID=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" --query cluster.resourcesVpcConfig.vpcId --output text)
 
 step "1/8 kubeconfig: $CLUSTER_NAME ($AWS_REGION)"
-aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION" >/dev/null
 kubectl config current-context
 
 step "2/8 AWS Load Balancer Controller $LB_CONTROLLER_CHART_VERSION"
-helm repo add eks https://aws.github.io/eks-charts >/dev/null 2>&1 || true
+helm repo add eks https://aws.github.io/eks-charts >/dev/null
 helm repo update eks >/dev/null
 render "$ROOT/platform/aws/values/aws-load-balancer-controller.yaml" | helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
   --namespace kube-system --version "$LB_CONTROLLER_CHART_VERSION" --values - --wait
@@ -66,7 +60,7 @@ for f in ec2nodeclass nodepool-app nodepool-kafka; do
 done
 
 step "4/8 ArgoCD chart $ARGOCD_CHART_VERSION"
-helm repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
+helm repo add argo https://argoproj.github.io/argo-helm >/dev/null
 helm repo update argo >/dev/null
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 helm upgrade --install argocd argo/argo-cd --namespace argocd --version "$ARGOCD_CHART_VERSION" \
@@ -79,25 +73,20 @@ kubectl apply -f "$ROOT/argocd/projects/"
 kubectl apply -f "$ROOT/argocd/bootstrap/root-app.yaml"
 
 step "6/8 플랫폼 CRD 대기"
-for crd in gatewayclasses.gateway.networking.k8s.io envoyproxies.gateway.envoyproxy.io kafkas.kafka.strimzi.io scaledobjects.keda.sh; do
+for crd in gatewayclasses.gateway.networking.k8s.io envoyproxies.gateway.envoyproxy.io kafkas.kafka.strimzi.io scaledobjects.keda.sh securitypolicies.gateway.envoyproxy.io; do
   printf '  %s ' "$crd"
   for _ in $(seq 1 60); do kubectl get crd "$crd" >/dev/null 2>&1 && break; sleep 5; done
-  kubectl get crd "$crd" >/dev/null 2>&1 && echo ok || echo "아직 없음 (ArgoCD 동기화 확인: kubectl -n argocd get applications)"
+  kubectl get crd "$crd" >/dev/null || { echo "CRD 대기 실패: $crd" >&2; exit 1; }
+  echo ok
 done
 
 step "7/8 GatewayClass + Envoy Gateway → NLB"
 kubectl create namespace "$APP_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-GATEWAYCLASS="$ROOT/platform/kind/envoy-gateway/gatewayclass.yaml" # 1단계가 둔 파일. kind 와 같은 GatewayClass(envoy-gateway)
-if [ -f "$GATEWAYCLASS" ] && kubectl get crd gatewayclasses.gateway.networking.k8s.io >/dev/null 2>&1; then
-  kubectl apply -f "$GATEWAYCLASS"
-else
-  echo "GatewayClass 를 못 만들었다 ($GATEWAYCLASS 없음 또는 CRD 없음). 1단계 브랜치를 합친 뒤 다시 실행한다."
-fi
-if kubectl get crd envoyproxies.gateway.envoyproxy.io >/dev/null 2>&1; then
-  render "$ROOT/platform/aws/envoy-gateway/envoyproxy-nlb.yaml" | kubectl apply -f -
-else
-  echo "EnvoyProxy CRD 가 없다(Envoy Gateway 미설치). ArgoCD 동기화 뒤 다시 실행한다."
-fi
+kubectl apply -f "$ROOT/platform/aws/envoy-gateway/gatewayclass.yaml"
+render "$ROOT/platform/aws/envoy-gateway/envoyproxy-nlb.yaml" | kubectl apply -f -
+# 비밀값은 argv/로그에 넣지 않는다. 정책 생성 실패 시 Gateway를 공개하지 않는다.
+terraform -chdir="$TF_DIR" output -json | python3 "$ROOT/platform/aws/envoy-gateway/origin-policy.py" "$APP_NAMESPACE" | kubectl apply --server-side -f -
+render "$ROOT/platform/aws/envoy-gateway/gateway.yaml" | kubectl apply -f -
 
 step "8/8 RDS 서비스별 DB"
 "$ROOT/platform/aws/rds-init.sh"
@@ -109,5 +98,5 @@ cat <<EOF
   kubectl -n karpenter get pods                       # Karpenter Running
   kubectl -n argocd get applications                  # 루트 앱 Synced
   kubectl -n $APP_NAMESPACE get svc                   # Envoy Service 의 EXTERNAL-IP 에 NLB 주소가 생기면 make aws-up 이 CloudFront 에 연결한다
-ArgoCD UI: make argocd-ui (admin 비밀번호는 출력됨)
+AWS 전용 앱 overlay·이미지·설정 배포와 실제 서비스 검증은 별도 단계다.
 EOF

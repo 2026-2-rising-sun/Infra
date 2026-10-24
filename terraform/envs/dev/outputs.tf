@@ -47,3 +47,12 @@ output "rds_master_user_secret_arn" {
 output "github_actions_role_arn" {
   value = module.ci.actions_role_arn
 }
+
+output "cluster_arn" {
+  value = module.eks.cluster_arn
+}
+
+output "origin_verify_secret" {
+  value     = var.origin_verify_secret
+  sensitive = true
+}

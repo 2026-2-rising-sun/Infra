@@ -1,14 +1,14 @@
 # dev 환경 루트 모듈. 설계안 5장의 모듈을 여기서 잇는다.
 #
 # 원칙: 필요할 때만 만든다. `make aws-up` 으로 만들고 작업이 끝나면 `make aws-down` 으로 지운다.
-# 남겨 두는 것은 상태 저장소(terraform/bootstrap)와 ECR 이미지뿐이다.
+# 남겨 두는 것은 별도 상태 저장소(terraform/bootstrap)뿐이다. ECR 이미지와 RDS 데이터도 destroy 시 삭제된다.
 #
 # 적용 순서(모듈 의존 관계):
 #   network → eks → (karpenter, nlb, rds) → edge → ci
 # edge 는 NLB 주소(nlb_dns_name)가 생긴 뒤 한 번 더 apply 해야 /api/* 가 연결된다. 자세한 건 modules/edge/README.md.
 
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     aws = {

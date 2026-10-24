@@ -31,7 +31,6 @@ variable "eks_version" {
 variable "eks_public_access_cidrs" {
   description = "kubectl 을 쓸 작업자 IP. 비우지 말고 자기 공인 IP/32 로 좁힌다"
   type        = list(string)
-  default     = ["0.0.0.0/0"]
 }
 
 variable "rds_instance_class" {

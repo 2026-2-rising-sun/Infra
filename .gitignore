@@ -33,3 +33,6 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# AWS NLB 주소를 다음 apply에서도 유지하는 로컬 값
+/terraform/envs/dev/aws-runtime.auto.tfvars.json
