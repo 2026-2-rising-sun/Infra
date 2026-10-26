@@ -33,7 +33,7 @@ jobs:
           shopt -s nullglob
           roots=(terraform/bootstrap/main.tf terraform/envs/*/main.tf terraform/tests/main.tf)
           if [ ${#roots[@]} -eq 0 ]; then
-            echo "No terraform root modules under terraform/envs — nothing to validate"
+            echo "terraform/envs 아래에 루트 모듈이 없어 검증을 건너뜁니다"
             exit 0
           fi
           for root in "${roots[@]}"; do

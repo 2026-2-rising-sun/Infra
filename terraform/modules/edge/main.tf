@@ -203,7 +203,7 @@ resource "aws_wafv2_web_acl" "this" {
   }
 }
 
-# --- CloudFront -----------------------------------------------------------
+# --- CloudFront 배포 -----------------------------------------------------------
 
 data "aws_cloudfront_cache_policy" "caching_optimized" {
   name = "Managed-CachingOptimized"
@@ -301,7 +301,7 @@ resource "aws_cloudfront_distribution" "this" {
   }
 }
 
-# --- Route 53 ---------------------------------------------------------------
+# --- Route 53 DNS 설정 ---------------------------------------------------------------
 
 resource "aws_route53_record" "apex" {
   for_each = toset(["A", "AAAA"])

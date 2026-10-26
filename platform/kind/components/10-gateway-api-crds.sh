@@ -1,4 +1,4 @@
-# Gateway API CRD (Gateway, HTTPRoute, GatewayClass ...).
+# Gateway API의 리소스 정의(Gateway, HTTPRoute, GatewayClass 등).
 # Envoy Gateway 차트도 첫 설치 때 같은 CRD 를 넣지만 helm 은 CRD 를 업그레이드하지 않는다.
 # 버전을 여기서 명시적으로 관리하려고 따로 적용한다. 이미 있으면 server-side apply 가 갱신만 한다.
 # 채널은 experimental: Envoy Gateway v1.9 가 번들하는 채널과 같다(standard 로 바꾸면 EG 기능 일부가 빠진다).

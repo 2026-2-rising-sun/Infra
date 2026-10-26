@@ -50,7 +50,7 @@ export default function () {
     let beats = 0;
     client.on('open', () => openTime.add(Date.now() - t0));
     client.on('event', () => events.add(1));
-    client.on('error', (e) => console.warn(`sse error vu=${__VU}: ${e.error()}`));
+    client.on('error', (e) => console.warn(`SSE 오류: 가상 사용자=${__VU} 원인=${e.error()}`));
     const timer = setInterval(() => {
       postJson(api('live', `/v1/broadcasts/${id}/viewers/heartbeat`), { viewerId }, {}, { tags: { name: 'heartbeat' } });
       if (++beats % CHAT_EVERY === 0) postJson(api('live', `/v1/broadcasts/${id}/chats`), { content: `k6 ${__VU}-${beats}` }, bearer(session), { tags: { name: 'chat' } });

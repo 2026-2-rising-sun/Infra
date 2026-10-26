@@ -14,13 +14,13 @@ for f in backend.hcl terraform.tfvars; do
   [ -f "$TF_DIR/$f" ] || { echo "$TF_DIR/$f 가 없다. $f.example 을 복사해 채운다." >&2; exit 1; }
 done
 
-echo "==> terraform apply (1/3)"
+echo "==> Terraform 변경 적용 (1/3)"
 terraform -chdir="$TF_DIR" init -backend-config=backend.hcl -input=false >/dev/null
 terraform -chdir="$TF_DIR" apply
 
 aws_context
 
-echo "==> platform install (2/3)"
+echo "==> 플랫폼 설치 (2/3)"
 "$ROOT/platform/aws/install.sh"
 
 echo "==> NLB 주소 대기 (3/3)"

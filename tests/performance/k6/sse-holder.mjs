@@ -69,7 +69,7 @@ function report(tag) {
 async function main() {
   const id = await broadcastId();
   const url = `${BASE}/api/live/v1/broadcasts/${id}/events`;
-  console.log(`holding ${COUNT} SSE connections to ${url} (ramp ${RAMP}s, hold ${HOLD}s)`);
+  console.log(`SSE 연결 유지: 연결 수=${COUNT} 주소=${url} 연결 증가 시간=${RAMP}초 유지 시간=${HOLD}초`);
   const ticker = setInterval(() => report('tick'), 5000);
   const tasks = [];
   const gap = (RAMP * 1000) / COUNT;
