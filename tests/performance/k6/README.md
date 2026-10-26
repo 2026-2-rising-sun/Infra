@@ -13,6 +13,7 @@ k6/
 ├── 02-coupon-drop.js                N 명이 같은 순간 쿠폰 발급
 ├── 03-redis-failure.js              01 + 시청자 수 API 1초 탐침. 도중에 Redis 파드를 지운다
 ├── 04-partition-tuning.js           파티션 6 → 12 로 바꾼 뒤 01 재실행
+├── 05-shopping-mixed.js             Shopping 상품 조회 혼합 부하 416 RPS (고정·단계). 아래 "시나리오 5" 참고
 └── run.sh          시나리오 실행 + 결과를 Prometheus remote write 로 전송
 ```
 
@@ -67,6 +68,67 @@ node tests/performance/k6/sse-holder.mjs --count 200 --ramp 30 --hold 180 &
 | `CLICKS` (02) | 2 | 사용자당 클릭 수. 2번째는 "이미 보유" 응답 확인용 |
 | `PARTITIONS` (04) | unset | 결과 태그용 |
 | `SEED_FILE` | `../.seed/seed.json` | 시드 파일. 상대 경로는 `lib/` 기준이라 바꿀 땐 절대 경로로 준다 |
+
+## 시나리오 5: Shopping 상품 조회 혼합 부하
+
+방송 1개 시청자 3,000명일 때 Shopping 파드 1개가 받는 요청을 Infra #49 표의 비율로 보낸다.
+
+| API | 요청/초 | 경로 |
+|---|---|---|
+| 상세 | 99 | Gateway `/api/shopping/v1/products/{id}` |
+| 상품 쿠폰 | 90 | Gateway `/api/shopping/v1/products/{id}/coupons` |
+| 구매 사전 확인 | 9 | Gateway `/api/shopping/v1/products/{id}/purchase-check?quantity=1` |
+| Live 묶음 조회 (10개) | 200 | Shopping 직접 `/v1/internal/products?ids=…` |
+| Commerce 단건 조회 | 18 | Shopping 직접 `/v1/internal/products/{id}` |
+
+판정은 p99 ≤ 300ms, 오류율 < 1%, dropped iterations 0 이다. 하나라도 넘으면 k6 가 0 이 아닌 코드로 끝난다.
+
+### 준비
+
+1. 판매 중 상품 1,000개와 앞 100개 상품에 붙는 쿠폰 1개를 만든다. 결과는 `.seed/products.json`. 실행할 때마다 새 상품을 만든다.
+   ```sh
+   node tests/performance/k6/seed.mjs --base http://localhost:9080 --products 1000 --coupon-products 100
+   ```
+   쿠폰은 Kafka 로 Shopping 에 동기화된다. 실행 전 `curl $BASE_URL/api/shopping/v1/products/<첫 상품 ID>/coupons` 로 쿠폰이 보이는지 확인한다.
+2. 내부 API 는 Gateway 에 없다. Shopping Service 를 따로 port-forward 한다.
+   ```sh
+   kubectl -n shoppinglive-dev port-forward svc/shopping-service 8081:8080
+   ```
+3. 서비스 토큰을 Secret 에서 읽어 환경변수로만 넘긴다. 파일·저장소에 쓰지 않는다. Live 용 토큰은 묶음·단건 조회를 모두 허용한다.
+   ```sh
+   export SERVICE_TOKEN=$(kubectl -n shoppinglive-dev get secret live-shopping-service-token -o jsonpath='{.data.token}' | base64 -d)
+   ```
+
+### 실행
+
+```sh
+export BASE_URL=http://localhost:9080 SHOPPING_URL=http://localhost:8081
+
+# 고정 부하: 416 RPS × 5분
+./tests/performance/k6/run.sh 05
+
+# 단계 부하: 416 RPS 의 0.5·1·1.5·2·3·4 배를 1분씩. 처음 실패한 단계와 원인을 출력한다
+./tests/performance/k6/run.sh 05 -e MODE=step
+
+# 상품 1개 집중: 상세·쿠폰·구매 확인·단건은 첫 상품, 묶음은 앞 10개만 조회한다
+./tests/performance/k6/run.sh 05 -e FOCUS=1
+```
+
+| 이름 | 기본값 | 뜻 |
+|---|---|---|
+| `MODE` | `fixed` | `fixed` 또는 `step` |
+| `SCALE` / `DURATION` | 1 / `5m` | 고정 부하의 배수와 시간 |
+| `STEPS` / `STEP_DURATION` | `0.5,1,1.5,2,3,4` / `1m` | 단계 부하의 배수 목록과 단계별 시간 |
+| `FOCUS` | unset | `1` 이면 상품 1개 집중 |
+| `SHOPPING_URL` | `http://localhost:8081` | 내부 API 를 받을 Shopping Service 주소 |
+| `SERVICE_TOKEN` | 없음(필수) | `X-Service-Token` 값 |
+| `PRODUCTS_FILE` | `./.seed/products.json` | 상품 시드. 상대 경로는 시나리오 파일 기준 |
+
+### 결과 확인
+
+- 터미널: 끝나면 API 별 목표·실제 요청률·차이(±5% 안이어야 한다)·p99 와, 단계별 요청률·p99·오류율·dropped·판정, 처음 실패한 단계를 출력한다.
+- 파일: `.results/<testid>.json` 에 단계(`step`)·API(`api`) 태그별 지표가 남는다.
+- Grafana: **06 · 부하 테스트** 대시보드에서 testid 를 고른다. 요청에는 `api`, `step`, `name` 태그가 붙는다. 같은 시간의 Shopping 파드 CPU·메모리를 함께 본다.
 
 ## SSE 를 k6 안에서 열려면 (선택)
 
