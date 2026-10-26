@@ -7,21 +7,21 @@
 set -euo pipefail
 
 if [ -z "${POSTGRES_MULTIPLE_DATABASES:-}" ]; then
-  echo "POSTGRES_MULTIPLE_DATABASES is not set, skipping per-service database creation"
+  echo "POSTGRES_MULTIPLE_DATABASES가 설정되지 않아 서비스별 DB 생성을 건너뜁니다"
   exit 0
 fi
 
 create_database() {
   local database="$1"
-  echo "Creating database '${database}' owned by '${POSTGRES_USER}'"
+  echo "DB 생성: 이름='${database}' 소유자='${POSTGRES_USER}'"
   psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" <<-EOSQL
     CREATE DATABASE "${database}" OWNER "${POSTGRES_USER}";
 EOSQL
 }
 
-echo "Multiple database creation requested: ${POSTGRES_MULTIPLE_DATABASES}"
+echo "서비스별 DB 생성 요청: ${POSTGRES_MULTIPLE_DATABASES}"
 IFS=',' read -ra databases <<< "${POSTGRES_MULTIPLE_DATABASES}"
 for database in "${databases[@]}"; do
   create_database "$(echo "${database}" | tr -d '[:space:]')"
 done
-echo "Per-service databases created"
+echo "서비스별 DB 생성 완료"

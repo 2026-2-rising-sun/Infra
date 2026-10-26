@@ -42,7 +42,7 @@ NLB_SECURITY_GROUP=$(tf_out nlb_security_group_id)
 ORIGIN_CERTIFICATE_ARN=$(tf_out origin_certificate_arn)
 VPC_ID=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" --query cluster.resourcesVpcConfig.vpcId --output text)
 
-step "1/8 kubeconfig: $CLUSTER_NAME ($AWS_REGION)"
+step "1/8 클러스터 접속 설정: $CLUSTER_NAME ($AWS_REGION)"
 kubectl config current-context
 
 step "2/8 AWS Load Balancer Controller $LB_CONTROLLER_CHART_VERSION"
@@ -59,7 +59,7 @@ for f in ec2nodeclass nodepool-app nodepool-kafka; do
   render "$ROOT/platform/aws/karpenter/$f.yaml" | kubectl apply -f -
 done
 
-step "4/8 ArgoCD chart $ARGOCD_CHART_VERSION"
+step "4/8 ArgoCD 차트 $ARGOCD_CHART_VERSION"
 helm repo add argo https://argoproj.github.io/argo-helm >/dev/null
 helm repo update argo >/dev/null
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
@@ -77,7 +77,7 @@ for crd in gatewayclasses.gateway.networking.k8s.io envoyproxies.gateway.envoypr
   printf '  %s ' "$crd"
   for _ in $(seq 1 60); do kubectl get crd "$crd" >/dev/null 2>&1 && break; sleep 5; done
   kubectl get crd "$crd" >/dev/null || { echo "CRD 대기 실패: $crd" >&2; exit 1; }
-  echo ok
+  echo 준비 완료
 done
 
 step "7/8 GatewayClass + Envoy Gateway → NLB"

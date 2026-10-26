@@ -30,8 +30,8 @@ jobs:
           l_max_size: "499"
           xl_label: "size/XL"
           fail_if_xl: "false"
-          # Exclude prose only; Terraform, manifests and executable YAML/JSON still count.
-          # v1.10.0 matches full filenames with Bash globs ('*' also spans directories).
+          # 설명 문서만 제외하고 Terraform·매니페스트·실행용 YAML/JSON은 변경량에 포함한다.
+          # v1.10.0은 전체 파일 경로를 Bash 글롭으로 비교한다('*'는 디렉터리 경계도 포함한다).
           files_to_ignore: >-
             *.md *.mdx *.rst *.adoc
             README*.txt */README*.txt docs/*.txt

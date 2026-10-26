@@ -46,7 +46,7 @@ export function setup() {
   const res = postJson(api('live', `/v1/seller/broadcasts/${seed.broadcastId}/start`), {}, bearer(seller), { tags: { name: 'broadcast-start' } });
   const ok = check(res, { 'broadcast start 200/409': (r) => r.status === 200 || r.status === 409 });
   if (!ok) throw new Error(`broadcast start failed: ${res.status} ${res.body}`);
-  console.log(`broadcast ${seed.broadcastId} started at ${new Date().toISOString()} (status ${res.status})`);
+  console.log(`방송 시작: 방송 ID=${seed.broadcastId} 시각=${new Date().toISOString()} 상태 코드=${res.status}`);
   return { startedAt: Date.now() };
 }
 

@@ -2,7 +2,7 @@
 .env
 local/.env
 
-# Terraform
+# Terraform 로컬 상태와 설정
 .terraform/
 .terraform.lock.hcl
 *.tfstate
@@ -11,7 +11,7 @@ local/.env
 !*.tfvars.example
 crash.log
 
-# Kubernetes
+# Kubernetes 접속 설정
 kubeconfig
 *.kubeconfig
 
@@ -26,12 +26,12 @@ __pycache__/
 /k8s/p2-security.md
 /local/p2/README.md
 
-# IDE
+# 개발 도구 설정
 .idea/
 *.iml
 .vscode/
 
-# OS
+# 운영체제 생성 파일
 .DS_Store
 
 # AWS NLB 주소를 다음 apply에서도 유지하는 로컬 값

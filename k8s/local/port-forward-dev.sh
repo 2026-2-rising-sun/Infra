@@ -45,7 +45,7 @@ elif (exec 3<>/dev/tcp/127.0.0.1/9080) 2>/dev/null; then
 else
   kubectl port-forward -n envoy-gateway-system "svc/$gw_svc" 9080:80 >/dev/null &
   pids+=("$!")
-  echo "open  localhost:9080 -> $gw_svc:80 (API 진입점)"
+  echo "연결  localhost:9080 -> $gw_svc:80 (API 진입점)"
 fi
 
 for entry in "${FORWARDS[@]}"; do
@@ -56,7 +56,7 @@ for entry in "${FORWARDS[@]}"; do
   fi
   kubectl port-forward -n "$NS" "svc/$svc" "$host_port:$svc_port" >/dev/null &
   pids+=("$!")
-  echo "open  localhost:$host_port -> $svc:$svc_port"
+  echo "연결  localhost:$host_port -> $svc:$svc_port"
 done
 
 echo

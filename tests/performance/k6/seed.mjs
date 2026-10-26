@@ -40,14 +40,14 @@ async function call(method, url, { body, token, headers = {} } = {}) {
 
 async function login(email, password) {
   const r = await call('POST', api('member', '/v1/auth/login'), { body: { email, password } });
-  if (!r.data) throw new Error(`login ${email} failed: ${r.status} ${r.text.slice(0, 200)}`);
+  if (!r.data) throw new Error(`로그인 실패: 계정=${email} 상태 코드=${r.status} ${r.text.slice(0, 200)}`);
   return r.data.accessToken;
 }
 
 async function ensureUser(i) {
   const email = `loadtest-${i}@load.test`;
   const r = await call('POST', api('member', '/v1/auth/signup'), { body: { email, password: PASSWORD, displayName: `부하테스트 ${i}` } });
-  if (r.status !== 201 && r.status !== 409) throw new Error(`signup ${email}: ${r.status} ${r.text.slice(0, 200)}`);
+  if (r.status !== 201 && r.status !== 409) throw new Error(`회원가입 실패: 계정=${email} 상태 코드=${r.status} ${r.text.slice(0, 200)}`);
   return { email, password: PASSWORD };
 }
 
@@ -65,7 +65,7 @@ async function createBroadcast(sellerToken) {
     headers: { 'Idempotency-Key': `loadtest-${randomUUID()}` },
     body: { title: `부하 테스트 ${new Date().toISOString().slice(0, 16)}`, scheduledAt, channelArn: 'arn:aws:ivs:ap-northeast-2:000000000000:channel/loadtest', playbackUrl: 'https://stub.invalid/loadtest/playlist.m3u8', hostName: '부하 테스트' },
   });
-  if (!r.data) throw new Error(`broadcast create: ${r.status} ${r.text.slice(0, 200)}`);
+  if (!r.data) throw new Error(`방송 생성 실패: 상태 코드=${r.status} ${r.text.slice(0, 200)}`);
   return r.data.id;
 }
 
@@ -83,14 +83,14 @@ async function createCoupon(sellerToken, productId) {
       productIds: [productId],
     },
   });
-  if (!r.data) throw new Error(`coupon create: ${r.status} ${r.text.slice(0, 200)}`);
+  if (!r.data) throw new Error(`쿠폰 생성 실패: 상태 코드=${r.status} ${r.text.slice(0, 200)}`);
   return r.data.id;
 }
 
 async function subscribeAlert(user, broadcastId) {
   const token = await login(user.email, user.password);
   const r = await call('POST', api('notification', '/v1/broadcast-alerts'), { token, body: { broadcastId } });
-  if (r.status !== 201 && r.status !== 409 && r.status !== 200) throw new Error(`alert ${user.email}: ${r.status} ${r.text.slice(0, 200)}`);
+  if (r.status !== 201 && r.status !== 409 && r.status !== 200) throw new Error(`알림 신청 실패: 계정=${user.email} 상태 코드=${r.status} ${r.text.slice(0, 200)}`);
 }
 
 async function pool(items, worker) {
@@ -112,24 +112,24 @@ async function main() {
   let previous = null;
   try { previous = JSON.parse(await readFile(OUT, 'utf8')); } catch { /* 처음 */ }
 
-  console.log(`base=${BASE} users=${USERS} couponLimit=${LIMIT}`);
+  console.log(`기준 주소=${BASE} 사용자 수=${USERS} 쿠폰 발급 한도=${LIMIT}`);
   const sellerToken = await login(SELLER.email, SELLER.password);
   const users = await pool(Array.from({ length: USERS }, (_, i) => i + 1), ensureUser);
-  console.log(`users ready: ${users.length}`);
+  console.log(`사용자 준비 완료: 사용자 수=${users.length}`);
 
   // 방송은 매번 새로 만든다. 지난 실행의 방송은 이미 시작됐거나 끝났을 수 있다.
   const broadcastId = await createBroadcast(sellerToken);
   const productId = await firstProductId(sellerToken);
   const couponId = args['reuse-coupon'] && previous ? previous.couponId : await createCoupon(sellerToken, productId);
-  console.log(`broadcast=${broadcastId} coupon=${couponId} product=${productId}`);
+  console.log(`방송 ID=${broadcastId} 쿠폰 ID=${couponId} 상품 ID=${productId}`);
 
   await pool(users, (u) => subscribeAlert(u, broadcastId));
-  console.log(`alert subscriptions: ${users.length}`);
+  console.log(`알림 신청 완료: 신청자 수=${users.length}`);
 
   const seed = { createdAt: new Date().toISOString(), base: BASE, broadcastId, couponId, couponLimit: LIMIT, productId, sellerEmail: SELLER.email, sellerPassword: SELLER.password, users };
   await mkdir(dirname(OUT), { recursive: true });
   await writeFile(OUT, JSON.stringify(seed, null, 2), { mode: 0o600 });
-  console.log(`wrote ${OUT}`);
+  console.log(`시드 파일 저장 완료: ${OUT}`);
 }
 
 main().catch((e) => { console.error(e.message || e); process.exit(1); });

@@ -41,13 +41,13 @@ export function probe() {
   if (down) {
     probe503.add(1);
     outageNow.add(1); // k6 Gauge 는 add 가 "현재 값 설정"이다
-    if (outageStart === null) { outageStart = Date.now(); console.warn(`viewer count DOWN at ${new Date().toISOString()} (status ${res.status})`); }
+    if (outageStart === null) { outageStart = Date.now(); console.warn(`시청자 수 조회 장애 발생: 시각=${new Date().toISOString()} 상태 코드=${res.status}`); }
   } else {
     outageNow.add(0);
     if (outageStart !== null) {
       const sec = (Date.now() - outageStart) / 1000;
       outageSeconds.add(sec);
-      console.warn(`viewer count UP after ${sec.toFixed(1)}s at ${new Date().toISOString()}`);
+      console.warn(`시청자 수 조회 복구: 장애 지속 시간=${sec.toFixed(1)}초 시각=${new Date().toISOString()}`);
       outageStart = null;
     }
     check(res, { 'probe 200': (r) => r.status === 200 });
