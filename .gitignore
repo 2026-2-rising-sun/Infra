@@ -17,6 +17,7 @@ kubeconfig
 
 # 팀 로컬 실행의 소스·비밀정보·백업·로그
 /.local-team/
+/.local-current/
 __pycache__/
 
 # 에이전트 작업 아티팩트

@@ -1,0 +1,21 @@
+{
+  "cluster": "shoppinglive-local",
+  "namespace": "shoppinglive-local",
+  "observer_namespace": "shoppinglive-local-observability",
+  "backend": {
+    "url": "https://github.com/2026-2-rising-sun/Backend.git",
+    "commit": "5c564d5dbc95976ab6c9039d233f64d0aaffaefe"
+  },
+  "frontend": {
+    "url": "https://github.com/2026-2-rising-sun/Frontend.git",
+    "commit": "ec5d9ff82e1a17e4557583f0aadcf80c05096a2d"
+  },
+  "ports": {
+    "frontend": 6174,
+    "api": 19481,
+    "grafana": 14000,
+    "kafka-ui": 19080,
+    "redisinsight": 16540
+  },
+  "node_image": "kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5"
+}

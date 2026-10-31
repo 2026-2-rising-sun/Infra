@@ -41,13 +41,13 @@ jobs:
         run: |
           kubectl kustomize platform/kind/metrics-server > /tmp/metrics-server.yaml
           python3 -m py_compile k8s/local/observe.py observability/local/deploy.py observability/local/instrument.py observability/local/ui.py
-          python3 -m py_compile local/team/run.py local/team/seed.py
+          python3 -m py_compile local/team/run.py local/team/seed.py local/team/seed-products.py local/team/seed-coupon.py
           python3 -m unittest discover -s local/team -p 'test_*.py'
           python3 -m unittest discover -s k8s/local -p 'test_*.py'
           python3 -m unittest discover -s observability/local -p 'test_*.py'
           python3 k8s/local/observe.py tools > /tmp/tools.json
           python3 observability/local/deploy.py > /tmp/observability.json
-          python3 -c 'import json; from pathlib import Path; [json.loads(p.read_text()) for p in [Path("/tmp/tools.json"), Path("/tmp/observability.json"), Path("local/team/versions.json"), *Path("observability/local").glob("dashboard-*.json")]]'
+          python3 -c 'import json; from pathlib import Path; [json.loads(p.read_text()) for p in [Path("/tmp/tools.json"), Path("/tmp/observability.json"), *Path("local/team").glob("versions*.json"), *Path("observability/local").glob("dashboard-*.json")]]'
 
   coupon-scenario:
     runs-on: ubuntu-latest
