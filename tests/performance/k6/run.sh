@@ -12,7 +12,7 @@
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-scenario=${1:?usage: run.sh <01|02|03|04|script.js> [k6 args...]}
+scenario=${1:?usage: run.sh <01|02|03|04|05|script.js> [k6 args...]}
 shift
 
 case "$scenario" in
@@ -20,6 +20,7 @@ case "$scenario" in
   02) script="$here/02-coupon-drop.js" ;;
   03) script="$here/03-redis-failure.js" ;;
   04) script="$here/04-partition-tuning.js" ;;
+  05) script="$here/05-shopping-mixed.js" ;;
   *) script="$scenario" ;;
 esac
 

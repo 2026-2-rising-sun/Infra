@@ -108,7 +108,49 @@ function parse(argv) {
   return o;
 }
 
+// 시나리오 5 전용: --products N 이면 위 1)~4) 대신 판매 중 상품 N 개와 앞 --coupon-products 개 상품에 붙는 쿠폰 1개를 만들어
+// .seed/products.json 에 쓴다. 이미지는 1장을 모든 상품이 같이 쓴다. 실행할 때마다 새 상품을 만든다.
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF1cAAAAASUVORK5CYII=', 'base64');
+
+async function seedProducts(count) {
+  const token = await login(SELLER.email, SELLER.password);
+  const form = new FormData();
+  form.append('file', new Blob([PNG], { type: 'image/png' }), 'loadtest.png');
+  const img = await fetch(api('shopping', '/v1/seller/product-images'), { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+  const imageId = img.ok && (await img.json()).data.imageId;
+  if (!imageId) throw new Error(`이미지 업로드 실패: 상태 코드=${img.status}`);
+
+  const run = randomUUID().slice(0, 8);
+  const productIds = await pool(Array.from({ length: count }, (_, i) => i + 1), async (i) => {
+    const p = await call('POST', api('shopping', '/v1/seller/products'), { token, headers: { 'X-Idempotency-Key': `loadtest-${run}-${i}` }, body: { name: `부하 테스트 상품 ${i}`, description: '시나리오 5 혼합 조회용', mainImageId: imageId } });
+    if (!p.data) throw new Error(`상품 등록 실패: 상태 코드=${p.status} ${p.text.slice(0, 200)}`);
+    // 판매정보 API 는 응답 봉투가 없다.
+    const s = await call('POST', api('commerce', '/v1/sales'), { token, body: { productId: p.data.productId, price: 10000, initialStock: 100000 } });
+    if (!s.json || !s.json.id) throw new Error(`판매정보 등록 실패: 상품 ID=${p.data.productId} 상태 코드=${s.status} ${s.text.slice(0, 200)}`);
+    const st = await call('PATCH', api('commerce', `/v1/sales/${s.json.id}/status`), { token, body: { status: 'ON_SALE' } });
+    if (st.status !== 200) throw new Error(`판매 시작 실패: 상품 ID=${p.data.productId} 상태 코드=${st.status} ${st.text.slice(0, 200)}`);
+    return p.data.productId;
+  });
+  console.log(`판매 중 상품 준비 완료: 상품 수=${productIds.length}`);
+
+  const couponProducts = productIds.slice(0, Number(args['coupon-products'] || 100));
+  const now = Date.now();
+  const c = await call('POST', api('commerce', '/v1/seller/coupons'), {
+    token,
+    body: { name: `시나리오5 ${new Date(now).toISOString().slice(0, 16)}`, fixedDiscount: 1000, issuanceLimit: 100000, startsAt: new Date(now - 60_000).toISOString(), endsAt: new Date(now + 7 * 24 * 3600_000).toISOString(), expiresAt: new Date(now + 8 * 24 * 3600_000).toISOString(), productIds: couponProducts },
+  });
+  if (!c.data) throw new Error(`쿠폰 생성 실패: 상태 코드=${c.status} ${c.text.slice(0, 200)}`);
+  console.log(`쿠폰 ID=${c.data.id} 적용 상품 수=${couponProducts.length}`);
+
+  const out = resolve(args.out || `${here}/.seed/products.json`);
+  await mkdir(dirname(out), { recursive: true });
+  // 쿠폰이 붙은 상품이 앞에 온다. 시나리오 5 의 FOCUS=1 은 첫 상품을 쓴다.
+  await writeFile(out, JSON.stringify({ createdAt: new Date().toISOString(), base: BASE, couponId: c.data.id, couponProductCount: couponProducts.length, productIds }, null, 2));
+  console.log(`시드 파일 저장 완료: ${out}`);
+}
+
 async function main() {
+  if (args.products) return seedProducts(Number(args.products === true ? 1000 : args.products));
   let previous = null;
   try { previous = JSON.parse(await readFile(OUT, 'utf8')); } catch { /* 처음 */ }
 
