@@ -18,8 +18,9 @@ import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
-CONFIG = json.loads((Path(__file__).with_name('versions.json')).read_text())
-WORK = ROOT / '.local-team'
+LOCAL = os.environ.get('SHOPPINGLIVE_ENV') == 'local'
+CONFIG = json.loads((Path(__file__).with_name('versions-local.json' if LOCAL else 'versions.json')).read_text())
+WORK = ROOT / ('.local-current' if LOCAL else '.local-team')
 STATE = WORK / 'state.json'
 CONTEXT = 'kind-' + CONFIG['cluster']
 SERVICES = ['member', 'shopping', 'commerce', 'live', 'notification']
@@ -86,7 +87,7 @@ def checkout(name):
 def require_cluster():
     data = state()
     if not data.get('cluster_owned') or not (WORK / 'kubeconfig').exists():
-        raise RuntimeError('먼저 make setup을 실행하세요. 기존 개발 클러스터를 대신 변경하지 않습니다.')
+        raise RuntimeError(f'먼저 make {"local-setup" if LOCAL else "setup"}을 실행하세요. 기존 개발 클러스터를 대신 변경하지 않습니다.')
     nodes = run('kind', 'get', 'nodes', '--name', CONFIG['cluster'], capture=True).split()
     if not nodes:
         raise RuntimeError('설치 기록은 있지만 kind 노드가 없습니다. 클러스터 삭제 여부를 확인하세요.')
@@ -94,6 +95,15 @@ def require_cluster():
         if run('docker', 'inspect', '--format', '{{.State.Running}}', node, capture=True).strip() != 'true':
             run('docker', 'start', node)
     kubectl('wait', '--for=condition=Ready', 'node', '--all', '--timeout=180s')
+
+
+def stop():
+    if not state().get('cluster_owned') or not (WORK/'kubeconfig').exists():
+        raise RuntimeError('이 환경의 클러스터 소유 기록이 없습니다. 다른 클러스터를 중지하지 않습니다.')
+    nodes = run('kind', 'get', 'nodes', '--name', CONFIG['cluster'], capture=True).split()
+    if not nodes:
+        raise RuntimeError('소유 기록은 있지만 클러스터 노드를 찾을 수 없습니다.')
+    run('docker', 'stop', *nodes)
 
 
 def wait_apps():
@@ -145,7 +155,7 @@ def setup():
     data['sample'] = seed(CONFIG, ENV, WORK)
     data['ready'] = True
     save(data)
-    print('\n설치 완료. make start로 프론트와 관리 UI를 함께 연결하세요.', flush=True)
+    print(f'\n설치 완료. make {"local-start" if LOCAL else "start"}로 프론트와 관리 UI를 함께 연결하세요.', flush=True)
     print('테스트 로그인: user / user, seller / seller')
 
 
@@ -155,7 +165,7 @@ def free_ports(ports):
             try:
                 sock.bind(('127.0.0.1', port))
             except OSError:
-                raise RuntimeError(f'{port} 포트가 사용 중입니다. 기존 실행을 종료하거나 PORT_OFFSET=1000 make start를 사용하세요.')
+                raise RuntimeError(f'{port} 포트가 사용 중입니다. 기존 실행을 종료하거나 PORT_OFFSET을 바꾸세요.')
 
 
 @contextmanager
@@ -212,7 +222,7 @@ def start(only_ui=False):
     prerequisites()
     require_cluster()
     if not state().get('ready'):
-        raise RuntimeError('최초 설치가 완료되지 않았습니다. make setup을 다시 실행하세요.')
+        raise RuntimeError(f'최초 설치가 완료되지 않았습니다. make {"local-setup" if LOCAL else "setup"}을 다시 실행하세요.')
     frontend = checkout('frontend')
     offset = int(os.environ.get('PORT_OFFSET', '0'))
     ports = {name: port+offset for name, port in CONFIG['ports'].items()}
@@ -255,7 +265,7 @@ def start(only_ui=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['setup', 'start', 'ui', 'status', 'grafana-login'])
+    parser.add_argument('command', choices=['setup', 'start', 'stop', 'ui', 'status', 'grafana-login'])
     args = parser.parse_args()
     os.umask(0o077)
     def interrupt(signum, frame):
@@ -266,6 +276,8 @@ def main():
             setup()
         elif args.command in ['start', 'ui']:
             start(args.command == 'ui')
+        elif args.command == 'stop':
+            stop()
         else:
             if not STATE.exists():
                 raise RuntimeError('설치 기록이 없습니다. make setup부터 실행하세요.')

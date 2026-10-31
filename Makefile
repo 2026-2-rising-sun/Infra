@@ -1,4 +1,4 @@
-.PHONY: setup start status ui grafana-login aws-bootstrap aws-up aws-down argocd-ui
+.PHONY: setup start status ui grafana-login local-setup local-start local-status local-seed local-coupon-seed local-stop aws-bootstrap aws-up aws-down argocd-ui
 setup:
 	python3 local/team/run.py setup
 start:
@@ -9,6 +9,18 @@ ui:
 	python3 local/team/run.py ui
 grafana-login:
 	python3 local/team/run.py grafana-login
+local-setup:
+	SHOPPINGLIVE_ENV=local python3 local/team/run.py setup
+local-start:
+	SHOPPINGLIVE_ENV=local python3 local/team/run.py start
+local-status:
+	SHOPPINGLIVE_ENV=local python3 local/team/run.py status
+local-seed:
+	python3 local/team/seed-products.py
+local-coupon-seed:
+	python3 local/team/seed-coupon.py
+local-stop:
+	SHOPPINGLIVE_ENV=local python3 local/team/run.py stop
 
 # --- AWS (terraform/README.md 참고) ---
 # 상태 저장소. 계정당 한 번만.
