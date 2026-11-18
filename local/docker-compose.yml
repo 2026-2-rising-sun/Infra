@@ -80,6 +80,19 @@ services:
       timeout: 10s
       retries: 10
 
+  # 토스페이먼츠 가짜 서버(WireMock). Backend payment-service local 프로필의 기본 토스 주소(localhost:59080)다.
+  # 응답 정의는 mocks/toss/mappings. 실제 토스는 Backend를 toss-real 프로필로 띄울 때만 쓴다.
+  toss-mock:
+    image: wiremock/wiremock:3.9.1
+    container_name: shoppinglive-toss-mock
+    restart: unless-stopped
+    # JDK HttpClient의 h2c 업그레이드 요청 본문이 비지 않게 끈다.
+    command: ["--disable-http2-plain"]
+    ports:
+      - "127.0.0.1:${TOSS_MOCK_PORT:-59080}:8080"
+    volumes:
+      - ./mocks/toss:/home/wiremock:ro
+
   # --- 확인용 관리 UI (tools 프로필) ---
   # 기본 `up` 에는 포함되지 않는다. 필요할 때만:
   #   docker compose -f local/docker-compose.yml --profile tools up -d

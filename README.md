@@ -37,7 +37,7 @@ cp local/.env.example local/.env     # 값 채우기
 docker compose -f local/docker-compose.yml up -d
 ```
 
-Postgres(5432, 서비스별 DB 5개) · Redis(6379) · Kafka(29092)가 뜹니다.
+Postgres(5432, 서비스별 DB 5개) · Redis(6379) · Kafka(29092) · 가짜 토스페이먼츠(59080)가 뜹니다.
 Backend 서비스는 호스트에서 직접 실행하고 여기에 붙습니다. 접속 정보는 [`local/README.md`](local/README.md) 참고.
 
 ## 서비스 진입점

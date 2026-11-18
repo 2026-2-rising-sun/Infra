@@ -17,6 +17,25 @@ docker compose -f local/docker-compose.yml ps
 | PostgreSQL | `postgres:16-alpine` | 5432 |
 | Redis | `redis:7-alpine` | 6379 |
 | Kafka (KRaft, Zookeeper 없음) | `apache/kafka:4.0.0` | 29092 |
+| 가짜 토스페이먼츠 (WireMock) | `wiremock/wiremock:3.9.1` | 59080 |
+
+## 외부 서비스 Mock
+
+외부 서비스 대신 응답하는 가짜 서버다. 기본 `up` 에 함께 뜬다. 응답 정의는 `mocks/<이름>/mappings/` 에 둔다.
+
+### 토스페이먼츠 (`toss-mock`, `localhost:59080`)
+
+Backend payment-service 를 `local` 프로필로 띄우면 결제 승인을 실제 토스 대신 여기로 보낸다. 실제 토스 테스트 환경은 Backend 를 `local,toss-real` 프로필로 띄울 때만 쓴다.
+
+| 승인 요청의 paymentKey | 응답 |
+|---|---|
+| 아래 시나리오 키가 아닌 값 | 요청한 orderId·금액으로 승인(DONE) |
+| `pk-ok` / `pk-decline` / `pk-retry` | 승인 / 거절(403) / 승인 |
+| `pk-slow` | 12초 뒤 승인 |
+| `pk-5xx` | 500 뒤 조회하면 승인 |
+| `pk-mismatch` | 금액이 다른 승인 → Backend 가 보상 취소 |
+
+시나리오 키는 orderId 회차 `-1`(`pk-retry` 만 `-2`) 기준이다. 시나리오별 순서와 기대 결과는 Backend `services/payment-service/local/README.md` 에 있다. 요청 기록은 `curl localhost:59080/__admin/requests` 로 보고 `curl -X DELETE localhost:59080/__admin/requests` 로 지운다. 응답 정의를 바꿨다면 `docker compose -f local/docker-compose.yml restart toss-mock`.
 
 ## 확인용 관리 UI (`tools` 프로필)
 
