@@ -45,20 +45,30 @@ docker compose -f local/docker-compose.yml --profile tools up -d
 | 서비스 | DB 이름 | 로컬 실행 포트 |
 |---|---|---|
 | member-service | `member` | 8081 |
-| shopping-service | `shopping` | 8082 |
-| commerce-service | `commerce` | 8083 |
+| catalog-service | `catalog` | 8082 |
+| commercecore-service | `commercecore` | 8083 |
 | live-service | `live` | 8084 |
 | notification-service | `notification` | 8085 |
+| payment-service | `payment` | 8086 |
 
-- JDBC URL: `jdbc:postgresql://localhost:5432/<db>` (계정은 5개 DB 공통, `.env` 의 `POSTGRES_USER`/`POSTGRES_PASSWORD`)
+`shopping`·`commerce`는 서비스 분리 전 Backend 커밋(shopping-service·commerce-service)용으로 남겨 둔다.
+
+- JDBC URL: `jdbc:postgresql://localhost:5432/<db>` (계정은 모든 DB 공통, `.env` 의 `POSTGRES_USER`/`POSTGRES_PASSWORD`)
 - Redis: `localhost:6379`
 - Kafka bootstrap servers: `localhost:29092`
   컨테이너 **안에서** 붙을 때는 `kafka:9092` 다. 리스너가 둘로 나뉘어 있다.
 
-> 서비스별 포트 8081~8085 는 5개를 한 호스트에 동시에 띄울 때 충돌을 피하기 위한 것이다.
+> 서비스별 포트 8081~8086 은 여러 서비스를 한 호스트에 동시에 띄울 때 충돌을 피하기 위한 것이다.
 > 쿠버네티스에서는 파드마다 주소가 달라 전부 8080 을 쓴다 (`k8s/README.md` 참고).
 
 ## 서비스별 DB 생성
 
-`init/postgres/01-create-databases.sh` 가 `POSTGRES_MULTIPLE_DATABASES` 목록을 읽어 DB 5개를 만든다.
-**데이터 볼륨이 비어 있을 때만 실행된다.** DB 목록을 바꿨다면 `down -v` 로 볼륨을 지우고 다시 올려야 반영된다.
+`init/postgres/01-create-databases.sh` 가 `POSTGRES_MULTIPLE_DATABASES` 목록을 읽어 서비스별 DB 를 만든다.
+**데이터 볼륨이 비어 있을 때만 실행된다.** 이미 볼륨이 있으면 `down -v`(모든 DB 데이터 삭제) 대신 빠진 DB 만 만든다.
+
+```bash
+for db in catalog commercecore payment; do
+  docker exec shoppinglive-postgres psql -U "${POSTGRES_USER:-shoppinglive}" -tc "SELECT 1 FROM pg_database WHERE datname = '$db'" | grep -q 1 \
+    || docker exec shoppinglive-postgres psql -U "${POSTGRES_USER:-shoppinglive}" -c "CREATE DATABASE \"$db\";"
+done
+```
