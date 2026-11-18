@@ -1,0 +1,71 @@
+{
+  "mappings": [
+    {
+      "name": "S1 승인 성공",
+      "request": { "method": "POST", "urlPath": "/v1/payments/confirm",
+        "bodyPatterns": [{ "matchesJsonPath": "$[?(@.paymentKey == 'pk-ok')]" }] },
+      "response": { "status": 200, "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "paymentKey": "pk-ok", "orderId": "OD-LOCAL-OK-1", "status": "DONE", "totalAmount": 30000,
+          "approvedAt": "2026-11-16T10:00:00+09:00", "isPartialCancelable": true } }
+    },
+    {
+      "name": "S2 카드 거절",
+      "request": { "method": "POST", "urlPath": "/v1/payments/confirm",
+        "bodyPatterns": [{ "matchesJsonPath": "$[?(@.paymentKey == 'pk-decline')]" }] },
+      "response": { "status": 403, "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "code": "REJECT_CARD_PAYMENT", "message": "한도초과 혹은 잔액부족으로 결제에 실패했습니다." } }
+    },
+    {
+      "name": "S2 거절 뒤 새 결제창 승인",
+      "request": { "method": "POST", "urlPath": "/v1/payments/confirm",
+        "bodyPatterns": [{ "matchesJsonPath": "$[?(@.paymentKey == 'pk-retry')]" }] },
+      "response": { "status": 200, "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "paymentKey": "pk-retry", "orderId": "OD-LOCAL-DECLINE-2", "status": "DONE", "totalAmount": 30000,
+          "approvedAt": "2026-11-16T10:00:00+09:00", "isPartialCancelable": true } }
+    },
+    {
+      "name": "S3 토스가 12초 늦게 성공",
+      "request": { "method": "POST", "urlPath": "/v1/payments/confirm",
+        "bodyPatterns": [{ "matchesJsonPath": "$[?(@.paymentKey == 'pk-slow')]" }] },
+      "response": { "status": 200, "fixedDelayMilliseconds": 12000, "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "paymentKey": "pk-slow", "orderId": "OD-LOCAL-SLOW-1", "status": "DONE", "totalAmount": 30000,
+          "approvedAt": "2026-11-16T10:00:00+09:00", "isPartialCancelable": true } }
+    },
+    {
+      "name": "S4 승인 5xx(결과 불명)",
+      "request": { "method": "POST", "urlPath": "/v1/payments/confirm",
+        "bodyPatterns": [{ "matchesJsonPath": "$[?(@.paymentKey == 'pk-5xx')]" }] },
+      "response": { "status": 500, "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "code": "FAILED_INTERNAL_SYSTEM_PROCESSING", "message": "내부 시스템 처리 작업이 실패했습니다." } }
+    },
+    {
+      "name": "S4 조회하면 실제로는 승인됨",
+      "request": { "method": "GET", "urlPath": "/v1/payments/pk-5xx" },
+      "response": { "status": 200, "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "paymentKey": "pk-5xx", "orderId": "OD-LOCAL-UNKNOWN-1", "status": "DONE", "totalAmount": 30000,
+          "approvedAt": "2026-11-16T10:00:00+09:00", "isPartialCancelable": true } }
+    },
+    {
+      "name": "S5 승인 응답 금액이 다름",
+      "request": { "method": "POST", "urlPath": "/v1/payments/confirm",
+        "bodyPatterns": [{ "matchesJsonPath": "$[?(@.paymentKey == 'pk-mismatch')]" }] },
+      "response": { "status": 200, "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "paymentKey": "pk-mismatch", "orderId": "OD-LOCAL-MISMATCH-1", "status": "DONE", "totalAmount": 1,
+          "approvedAt": "2026-11-16T10:00:00+09:00", "isPartialCancelable": true } }
+    },
+    {
+      "name": "S5 보상 취소",
+      "request": { "method": "POST", "urlPath": "/v1/payments/pk-mismatch/cancel" },
+      "response": { "status": 200, "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "paymentKey": "pk-mismatch", "orderId": "OD-LOCAL-MISMATCH-1", "status": "CANCELED", "totalAmount": 1,
+          "approvedAt": "2026-11-16T10:00:00+09:00", "isPartialCancelable": false } }
+    },
+    {
+      "name": "기본 승인 성공 (위 시나리오 키가 아닌 모든 paymentKey, 요청 값을 그대로 돌려준다)",
+      "priority": 10,
+      "request": { "method": "POST", "urlPath": "/v1/payments/confirm" },
+      "response": { "status": 200, "headers": { "Content-Type": "application/json" }, "transformers": ["response-template"],
+        "body": "{\"paymentKey\": \"{{jsonPath request.body '$.paymentKey'}}\", \"orderId\": \"{{jsonPath request.body '$.orderId'}}\", \"status\": \"DONE\", \"totalAmount\": {{jsonPath request.body '$.amount'}}, \"approvedAt\": \"{{now timezone='Asia/Seoul' format=\"yyyy-MM-dd'T'HH:mm:ssXXX\"}}\", \"isPartialCancelable\": true}" }
+    }
+  ]
+}
