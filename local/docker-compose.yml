@@ -17,7 +17,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-shoppinglive}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       # init 스크립트가 아래 목록을 읽어 서비스별 DB 를 하나씩 생성한다.
-      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_MULTIPLE_DATABASES:-member,shopping,commerce,live,notification}
+      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_MULTIPLE_DATABASES:-member,shopping,commerce,live,notification,catalog,commercecore,payment}
       POSTGRES_DB: ${POSTGRES_USER:-shoppinglive}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
