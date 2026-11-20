@@ -11,6 +11,7 @@ name: shoppinglive-local
 services:
   postgres:
     image: postgres:16-alpine
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=10", "-c", "max_wal_senders=10"]
     container_name: shoppinglive-postgres
     restart: unless-stopped
     environment:
@@ -79,6 +80,53 @@ services:
       interval: 15s
       timeout: 10s
       retries: 10
+
+  # 생성만 수행한다. 기존 토픽/알림/Live/DLT와 auto-create 설정은 보존한다.
+  kafka-init:
+    image: apache/kafka:4.0.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/init/bootstrap.sh"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    volumes:
+      - ./init/kafka:/init:ro
+
+  # 테이블은 Backend migration이 생성한다. 등록은 local/cdc/register.py 참고.
+  connect:
+    image: shoppinglive/catalog-connect:3.3.2-1
+    build: ./cdc/connect
+    stop_grace_period: 90s
+    profiles: ["cdc"]
+    restart: unless-stopped
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      # Kafka expects the parent of the multi-jar plugin directory.
+      CONNECT_PLUGIN_PATH: /kafka/connect
+      GROUP_ID: catalog-cdc-connect
+      CONFIG_STORAGE_TOPIC: _connect-catalog-configs
+      OFFSET_STORAGE_TOPIC: _connect-catalog-offsets
+      STATUS_STORAGE_TOPIC: _connect-catalog-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_PARTITIONS: "1"
+      CONNECT_STATUS_STORAGE_PARTITIONS: "1"
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_HEADER_CONVERTER: org.apache.kafka.connect.storage.SimpleHeaderConverter
+      OFFSET_FLUSH_INTERVAL_MS: "1000"
+      OFFSET_FLUSH_TIMEOUT_MS: "10000"
+      SHUTDOWN_TIMEOUT: "60000"
+      HEAP_OPTS: "-Xms128m -Xmx384m"
+    ports:
+      - "127.0.0.1:${CONNECT_PORT:-18083}:8083"
 
   # 토스페이먼츠 가짜 서버(WireMock). Backend payment-service local 프로필의 기본 토스 주소(localhost:59080)다.
   # 응답 정의는 mocks/toss/mappings. 실제 토스는 Backend를 toss-real 프로필로 띄울 때만 쓴다.
