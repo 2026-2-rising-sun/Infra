@@ -2,6 +2,8 @@
 
 Core `public.event_outbox`의 `topic = commerce.catalog.snapshots.v1` INSERT와 최초 snapshot만 Kafka로 전달한다. 원본 상품/SKU 테이블, `payment_delivery_request`, 환불·결제·알림·Live 행은 발행하지 않는다. Core의 일반 relay와 lease/claim relay에서 이 Catalog 토픽을 제외한 **Backend 변경과 함께** 사용한다. CDC 장애를 relay fallback으로 처리하지 않는다.
 
+[Infra #58](https://github.com/2026-2-rising-sun/Infra/pull/58)은 `main`, [Backend #379](https://github.com/2026-2-rising-sun/Backend/pull/379)는 `dev`에 병합됐다. 아래는 실행 환경별로 적용해야 하는 절차이며, 병합을 connector 등록·실제 배포·운영 연동 완료로 해석하지 않는다. 기존 독립 로컬 검증의 범위는 해당 PR의 검증 기록을 따른다.
+
 ## 토픽과 메시지
 
 `../init/kafka/topics.tsv`가 로컬 목록이며 `k8s/overlays/dev/datatier/kafka.yaml`과 검사한다. 새 업무 토픽은 `commerce.catalog.snapshots.v1`(6 partitions), `commerce.refund.requests.v1`, `payment.refund.results.v1`, `payment.execution.results.v1`(각 3 partitions)이다. 기존 `commerce.payment-group.v1`, `commerce.coupon-info.v1`, `commerce.sales-info.v1`, `live.broadcast.v1`은 유지한다. 새 쿠폰 동기화 토픽은 없다. 기존 토픽 삭제·이름 변경과 전역 auto-create 비활성화는 하지 않는다.
@@ -85,10 +87,11 @@ DOCKER_HOST=unix:///Users/junje/.lima/shoppinglive-cdc/sock/docker.sock \
 
 ### Core DB와 connector 등록
 
-1. 기본 Compose에 PostgreSQL logical WAL 옵션을 적용했다. 기존 서버의 `wal_level` 변경은 재시작이 필요하므로 공용 환경은 소유자와 조율한다. 기존 볼륨을 지우지 않는다. `SHOW wal_level`, slot/sender 제한을 확인한다. k8s dev PostgreSQL도 같은 옵션을 선언하지만 이 작업에서 apply하지 않는다.
-2. Backend migrations로 Core DB와 `event_outbox`를 생성한다. `prepare.sql`을 **해당 DB의 테이블 소유자**로 실행한다. `catalog_cdc`는 LOGIN/REPLICATION·DB 접속·public 사용·Outbox SELECT만 받는다. publication을 직접 생성하므로 connector에는 superuser/테이블 소유권이 필요 없다. 새 컬럼/테이블은 필요하지 않다.
-3. `docker compose -f local/docker-compose.yml --profile cdc up -d --build`로 이미지/worker를 시작한다. 자동 등록하지 않으므로 migration이 끝나기 전에 connector가 실패하거나 잘못된 DB를 캡처하지 않는다. k8s에는 아직 Connect Deployment를 추가하지 않았으며, 운영 배포는 별도다.
-4. `CDC_DATABASE_PASSWORD`를 로컬 비밀 환경으로 주입하고 등록한다. 예시의 compose exec가 새 환경을 전달하려면 `-e CDC_DATABASE_PASSWORD`를 지정한다. connector REST config/compact config topic에는 자격증명이 보관되므로 접근을 제한한다. 원문 config 응답을 보고서에 출력하지 않는다.
+1. **데이터 보존부터 확인한다.** [기본 Compose](../README.md#데이터-보존과-설정-적용)는 PostgreSQL 이름 있는 볼륨을 유지한다. 반면 [k8s dev 설정](../../k8s/overlays/dev/datatier/postgres.yaml)은 `Recreate`·`emptyDir`이므로 현재와 다른 args·env를 적용하면 Pod 교체로 DB·slot/WAL이 사라질 수 있다. 적용 전에 소유자와 백업·복원 계획을 확인한다. `wal_level` 변경에는 서버 재시작이 필요하며, 적용 후 `SHOW wal_level`과 slot/sender 제한을 확인한다. DB 목록을 늘리려고 기존 볼륨을 지우지 않는다.
+2. 토픽을 준비하고 호환 Catalog 소비자와 스키마를 먼저 적용한다. Backend #379의 Core V109·Catalog V5를 포함한 각 서비스의 Flyway migration을 적용하고 Core `event_outbox`를 확인한다. 이어 **모든 Core 인스턴스**에서 일반·lease/claim relay가 Catalog 토픽을 제외하는지 확인한다. connector는 이 확인 전 등록하지 않는다. Infra의 CDC 준비 SQL이 Backend 업무 마이그레이션을 대신하지 않으며, 실제 앱 DB에는 `smoke-schema.sql`을 실행하지 않는다.
+3. 기존 상품·SKU를 채울 때는 Core의 `commercecore.catalog.backfill.enabled=true`를 명시한 기동에서 초기 적재 완료를 확인하고, 이후 기동에서는 해당 설정을 끈다. backfill은 기존 Product/SKU와 삭제 이력을 같은 버전의 Outbox 스냅샷으로 기록한다. Debezium의 `snapshot.mode=initial`은 **이미 Outbox에 있는 행**을 읽는 것이므로 이 초기 적재를 대신하지 않는다. 상품·SKU 변경의 Outbox 기록과 기본 60초 재고 배치는 새 Core 코드에서 동작하므로 connector 등록 뒤 켜는 별도 생산 스위치가 있다고 가정하지 않는다. 전환 중 생성된 Outbox를 보존한다.
+4. Backend migrations 이후 `prepare.sql`을 **해당 DB의 테이블 소유자**로 실행한다. `catalog_cdc`는 LOGIN/REPLICATION·DB 접속·public 사용·Outbox SELECT만 받는다. publication을 직접 생성하므로 connector에는 superuser/테이블 소유권이 필요 없다. 이 SQL은 CDC 권한·publication을 준비하며 업무 스키마를 만들지 않는다.
+5. `docker compose -f local/docker-compose.yml --profile cdc up -d --build`로 이미지/worker를 시작한 뒤 `CDC_DATABASE_PASSWORD`를 로컬 비밀 환경으로 주입해 검증·등록한다. 최초 등록은 자동이 아니다. 기존 worker에 connector가 이미 등록돼 있다면 재시작 시 자동 재개될 수 있으므로, 재전환 전에 등록 상태와 중지 여부부터 확인한다. 예시의 compose exec에는 `-e CDC_DATABASE_PASSWORD`를 지정한다. connector REST config/compact config topic에는 자격증명이 보관되므로 접근을 제한하고 원문 config 응답을 보고서에 출력하지 않는다. k8s에는 Connect Deployment가 없으며, 별도 배포가 필요하다.
 
 ```sh
 # CDC_DATABASE_PASSWORD는 별도 환경에서 주입한다(문서/파일에 실값을 쓰지 않는다).
@@ -111,9 +114,11 @@ CDC는 `published_at`을 갱신하지 않는다. NULL을 실패/미발행으로 
 
 Connect 재시작은 동일 group/config/offset/status 토픽, slot, publication, topic.prefix로 수행한다. `slot.drop.on.stop=false`를 유지한다. 장애 중 기록된 Outbox는 복구 후 이어서 전달하며 offset commit 경계에서는 중복될 수 있으므로 Catalog가 eventId·snapshot version으로 멱등 적용해야 한다. slot을 잃었거나 broker의 offset 데이터를 잃으면 조용히 최신 LSN부터 시작하지 않는다. 소비자 fence와 재적재 계획을 먼저 세운 뒤 별도 slot/offset으로 initial snapshot을 수행한다. 기본 Compose Kafka는 기존처럼 ephemeral이므로 컨테이너 **재생성** 시 offset 소실 위험이 있다. 독립 CDC Compose만 Kafka 데이터를 volume에 보관한다.
 
+이 이어읽기는 DB의 slot·필요 WAL과 broker의 내부 토픽·offset이 남아 있을 때의 복구다. dev PostgreSQL Pod 교체로 DB까지 잃으면 Kafka offset만으로 업무 데이터를 복원할 수 없다. DB 백업 복원 또는 원본 재구성, schema·권한·publication 준비, Core backfill과 Catalog 재적재 범위를 먼저 정한다. `initial` snapshot도 소실된 Outbox 행을 복구하지 않는다. KafkaTopic CR이나 bootstrap이 토픽 이름을 다시 만든다고 기존 메시지·offset이 복원되는 것도 아니다.
+
 ## 전환과 되돌리기
 
-전환: 새 토픽 bootstrap → 소비자 호환 배포 → DB logical replication/권한/publication → Core 일반·lease relay의 Catalog 제외 → connector 등록/상태 확인 → 상품/SKU 및 60초 재고 Outbox 생산 활성화 → key·version·lag·중복·비대상 미발행 대조 순이다. relay 배제 이전에 CDC를 켜면 이중 발행된다. 기존 알림·Live 경로와 기존 토픽·offset은 보존한다. 이 순서는 로컬/운영 rollout 지침이며 여기서 배포하지 않았다.
+전환은 위 [등록 절차](#core-db와-connector-등록)에 따라 데이터 보존 확인 → 토픽·소비자/스키마 준비 → 모든 Core relay의 Catalog 제외 → 필요한 backfill 완료 → CDC 권한/publication 준비 → connector 등록 → 실제 후속 메시지와 공개 조회 대조 순으로 진행한다. relay 배제 이전에 CDC를 켜면 이중 발행된다. REST RUNNING만 보지 말고 key·본문·version·lag·중복·비대상 미발행을 확인한다. 기존 알림·Live 경로와 기존 토픽·offset은 보존한다. 이 문서 변경에서 배포나 런타임 재검증은 수행하지 않았다.
 
 되돌리기: 먼저 connector를 pause/stop하고 task 정지·offset flush를 확인한다. Catalog 생산을 fence하고 마지막 전송 경계를 기록한다. 기존 소비자는 유지한다. 단순히 relay 제외 조건을 제거하면 이미 CDC 발행한 행도 NULL `published_at` 때문에 재발행된다. 소비자 멱등성·중복 대조/명시적인 재생 범위를 준비한 뒤에만 relay로 담당을 전환한다. 자동 fallback이나 outbox 일괄 완료 표시는 하지 않는다. slot/publication/내부 토픽은 장애 중 삭제하지 않는다. CDC를 완전히 폐기할 때는 재처리/재적재 필요가 없다는 확인과 WAL 영향 검토 후 별도 승인된 유지보수로 제거한다.
 

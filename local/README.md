@@ -8,7 +8,7 @@ docker compose -f local/docker-compose.yml up -d
 docker compose -f local/docker-compose.yml ps
 ```
 
-내리기: `down` (데이터 유지) / `down -v` (볼륨까지 삭제).
+내리기: `down`은 PostgreSQL·Redis 등의 이름 있는 볼륨을 남기고, `down -v`는 볼륨까지 삭제한다. 기본 Kafka에는 데이터 볼륨이 없어 컨테이너를 다시 만들면 메시지와 offset을 잃는다.
 
 ## 구성
 
@@ -20,6 +20,14 @@ docker compose -f local/docker-compose.yml ps
 | 가짜 토스페이먼츠 (WireMock) | `wiremock/wiremock:3.9.1` | 59080 |
 
 Kafka 토픽은 `init/kafka/topics.tsv`와 `kafka-init`이 명시적으로 생성한다. 기존 알림·Live 토픽과 auto-create는 유지한다. Core Outbox CDC용 Connect는 선택 `cdc` 프로필이며 [구성·독립 검증·복구 절차](cdc/README.md)를 따른다. 독립 smoke는 기본 스택과 다른 project/포트/DB/볼륨을 사용한다.
+
+## 데이터 보존과 설정 적용
+
+이 Compose의 PostgreSQL은 `postgres-data` 볼륨을 사용한다. logical WAL 옵션 때문에 컨테이너를 재생성하더라도 같은 project·볼륨을 유지해야 기존 DB를 이어 쓸 수 있다. 적용 전 대상 볼륨과 백업·복원 가능 여부를 확인하고, DB를 추가하려고 `down -v`를 실행하지 않는다. 기존 볼륨에는 아래의 [빠진 DB만 생성하는 절차](#서비스별-db-생성)를 사용한다.
+
+[개발 Kubernetes PostgreSQL](../k8s/README.md)은 이 Compose와 다르다. `Recreate` 전략과 Pod 수명의 임시 볼륨 `emptyDir`를 사용하므로, args·env 변경을 적용해 Pod가 교체되면 기존 DB 데이터와 복제 slot/WAL을 잃을 수 있다. 적용 전에 데이터 보존 필요성과 백업·복원 계획을 소유자와 확인한다. init 스크립트가 DB 이름을 다시 만드는 것은 업무 데이터 복구가 아니다.
+
+Infra #58과 [Backend #379](https://github.com/2026-2-rising-sun/Backend/pull/379)의 병합만으로 실행 환경의 CDC가 활성화되지는 않는다. 실제 연결 전에는 [스키마·relay 제외·초기 적재와 connector 등록 순서](cdc/README.md#core-db와-connector-등록)를 확인한다. 이 안내는 실제 배포나 운영 연동 완료 기록이 아니다.
 
 ## 외부 서비스 Mock
 

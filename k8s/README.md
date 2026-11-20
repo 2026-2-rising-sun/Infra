@@ -64,7 +64,7 @@ Service·HTTPRoute에는 8080만 연결한다. 필수 JWKS·개인키·호출 �
 
 dev 에는 Postgres/Redis 를 네임스페이스 안에 단일 pod 로, Kafka 는 Strimzi CR(Kafka/KafkaNodePool/KafkaTopic)로 띄운다.
 Strimzi 오퍼레이터가 CR 을 읽어 브로커 파드와 토픽을 만든다(설치는 `platform/kind/install.sh`).
-토픽 4개와 파티션 수를 YAML 로 선언하므로 부하 테스트에서 파티션을 바꾸는 실험을 apply 한 번으로 한다. AWS 에서도 같은 CR 을 쓴다.
+기존 업무 토픽 4개·추가 업무 토픽 4개·Connect 내부 토픽 3개와 파티션 수를 YAML 로 선언한다. [CDC 적용 순서와 복구 한계](../local/cdc/README.md)를 함께 확인한다. AWS 에서도 같은 CR 을 쓴다.
 
 | 리소스 | 이미지 | Service | 볼륨 |
 |---|---|---|---|
@@ -72,9 +72,10 @@ Strimzi 오퍼레이터가 CR 을 읽어 브로커 파드와 토픽을 만든다
 | Redis | `redis:7-alpine` | `redis:6379` | 없음 |
 | Kafka (Strimzi, KRaft, 노드 풀 `dual` 1개) | 오퍼레이터 기본 Kafka 이미지 | `kafka-kafka-bootstrap:9092` (별칭 `kafka:9092`) | `ephemeral` |
 
-- Postgres 는 ConfigMap 으로 붙인 init 스크립트가 서비스별 DB 5개(`member`, `shopping`, `commerce`, `live`, `notification`)를 만든다. `local/init/postgres/01-create-databases.sh` 와 같은 로직이다.
+- Postgres 는 ConfigMap 으로 붙인 init 스크립트가 서비스별 DB 8개(`member`, `shopping`, `commerce`, `live`, `notification`, `catalog`, `commercecore`, `payment`)를 만든다. 데이터 디렉터리가 비어 있을 때만 실행된다.
 - 자격증명은 `datatier/postgres.yaml` 의 Secret 에 있다. **dev 전용 폐기 가능한 값**이라 레포에 그대로 둔다. 다른 환경에서는 외부 시크릿 관리로 주입한다.
-- 어느 것도 데이터를 보존하지 않는다. pod 가 다시 뜨면 DB 는 init 스크립트로, Kafka 토픽은 KafkaTopic CR(DLT 는 auto-create)로 복구된다.
+- dev PostgreSQL은 `Recreate` 전략과 Pod 수명의 `emptyDir`를 쓴다. [PostgreSQL 설정](overlays/dev/datatier/postgres.yaml)의 args·env가 바뀌면 Pod가 교체되어 기존 DB 데이터·복제 slot/WAL을 잃을 수 있다. 적용 전에 소유자와 데이터 보존 필요성, 백업·복원 계획을 확인한다. [로컬 Compose의 이름 있는 볼륨](../local/README.md#데이터-보존과-설정-적용)과 구분한다.
+- Pod 교체 후 init 스크립트는 빈 DB를 만들 뿐 업무 데이터를 복구하지 않는다. Kafka의 임시 저장소도 Pod 교체 시 메시지·Connect offset을 잃을 수 있으며, KafkaTopic CR(DLT는 auto-create)은 토픽 이름·설정만 다시 만든다. 단순 컨테이너 재시작과 Pod 교체를 같은 복구로 취급하지 않는다.
 - Service 이름 `kafka` 는 이전 Deployment 시절 이름을 쓰는 곳(Backend dev 프로필 기본값, Kafka UI, 관측 exporter)을 위한 별칭이다. 서비스 Deployment 는 env `SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka-kafka-bootstrap:9092` 로 붙는다.
 - `datatier` 에는 `namePrefix` 를 붙이지 않는다. Backend 의 `dev` 프로필이 Service 이름(`postgres`/`redis`/`kafka`)으로 접속하므로 overlay 의 prefix 규약이 애플리케이션 설정으로 새어 나가지 않게 한다. 계층을 나눈 또 다른 이유는 `services` 의 `kind: Deployment` patch 가 미들웨어 Deployment 까지 잡아 `env[0]` 을 덮어쓰기 때문이다.
 - `perf`/`demo` 는 나중에 다른 방식으로 갈 수 있어 `base` 가 아니라 dev overlay 에만 뒀다.
@@ -128,6 +129,8 @@ Backend 를 Dockerfile 로 빌드해 `:local` 태그로 kind 에 넣는다. `ove
 ```
 
 ### 2. 배포
+
+기존 환경에 적용한다면 위의 PostgreSQL `Recreate`·`emptyDir` 데이터 보존 조건부터 확인한다. 아래 전체 apply는 PostgreSQL Pod template의 args·env 변경도 포함할 수 있다. 백업·복원 검토 없이 데이터가 유지된다고 가정하지 않는다. 이 절차만으로 CDC connector가 등록되지는 않는다.
 
 미들웨어를 먼저 올리고 준비된 뒤 서비스를 올린다. 한 번에 올리면 서비스가 Postgres 보다 먼저 떠서
 `Connection refused` 로 몇 번 재시작하고, 재시작 대기 시간(CrashLoopBackOff)이 점점 길어진다.
