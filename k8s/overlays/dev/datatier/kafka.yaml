@@ -35,7 +35,7 @@ spec:
       default.replication.factor: 1
       min.insync.replicas: 1
       # 소비 실패 시 Backend 가 <토픽>.notification.dlt 같은 DLT 토픽을 그때 만든다.
-      # 선언한 토픽 4개 외의 토픽은 자동 생성에 맡긴다.
+      # 명시한 토픽 외에도 기존 서비스의 DLT 자동 생성을 허용한다.
       auto.create.topics.enable: true
       group.initial.rebalance.delay.ms: 0
     jvmOptions:
@@ -114,6 +114,93 @@ metadata:
 spec:
   partitions: 3
   replicas: 1
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: commerce.catalog.snapshots.v1
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 6
+  replicas: 1
+  config:
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: commerce.refund.requests.v1
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: payment.refund.results.v1
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: payment.execution.results.v1
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: connect-catalog-configs
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  topicName: _connect-catalog-configs
+  partitions: 1
+  replicas: 1
+  config:
+    cleanup.policy: compact
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: connect-catalog-offsets
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  topicName: _connect-catalog-offsets
+  partitions: 1
+  replicas: 1
+  config:
+    cleanup.policy: compact
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: connect-catalog-status
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  topicName: _connect-catalog-status
+  partitions: 1
+  replicas: 1
+  config:
+    cleanup.policy: compact
 ---
 # 이전 Deployment 시절의 Service 이름(kafka:9092)을 그대로 쓰는 곳이 남아 있다:
 # Backend dev 프로필 기본값, Kafka UI(tools), 관측 스택의 kafka-exporter·observe.py.

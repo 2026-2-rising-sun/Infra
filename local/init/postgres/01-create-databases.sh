@@ -2,8 +2,7 @@
 # postgres 컨테이너 최초 기동 시(볼륨이 비어 있을 때)에만 실행된다.
 # POSTGRES_MULTIPLE_DATABASES 에 콤마로 나열된 서비스별 DB 를 하나씩 만든다.
 # 이미 데이터 볼륨이 있으면 실행되지 않으므로, DB 목록을 바꿨다면
-#   docker compose -f local/docker-compose.yml down -v
-# 로 볼륨을 지우고 다시 올려야 한다.
+# 빠진 DB만 별도로 생성한다. 기존 볼륨을 삭제해 초기화하지 않는다 (local/README.md).
 set -euo pipefail
 
 if [ -z "${POSTGRES_MULTIPLE_DATABASES:-}" ]; then

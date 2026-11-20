@@ -1,0 +1,21 @@
+# Fresh dedicated test DB for Core refunds; never points at Desktop's C DB.
+# Always use shoppinglive-cdc's explicit DOCKER_HOST socket.
+name: core-refunds-c-lima
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: core_refunds_c
+      POSTGRES_PASSWORD: core_refunds_c_local
+      POSTGRES_DB: core_refunds_c
+    ports:
+      - "127.0.0.1:25434:5432"
+    volumes:
+      - c-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U core_refunds_c -d core_refunds_c"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  c-postgres:

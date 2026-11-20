@@ -1,0 +1,60 @@
+# Independent project; inherits middleware configuration, never fixed shared names.
+name: shoppinglive-cdc-smoke
+services:
+  postgres:
+    extends:
+      file: ../docker-compose.yml
+      service: postgres
+    container_name: !reset null
+    environment:
+      POSTGRES_USER: cdc_smoke
+      POSTGRES_PASSWORD: cdc_smoke_local
+      POSTGRES_DB: cdc_smoke
+      POSTGRES_MULTIPLE_DATABASES: commercecore
+    ports: !override
+      - "127.0.0.1:${CDC_POSTGRES_PORT:-15432}:5432"
+    volumes: !override
+      - cdc-postgres:/var/lib/postgresql/data
+      - ../init/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cdc_smoke -d commercecore"]
+  kafka:
+    extends:
+      file: ../docker-compose.yml
+      service: kafka
+    container_name: !reset null
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:${CDC_KAFKA_PORT:-39092}"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
+      KAFKA_OPTS: "-XX:ActiveProcessorCount=2"
+    ports: !override
+      - "127.0.0.1:${CDC_KAFKA_PORT:-39092}:29092"
+    volumes:
+      - cdc-kafka:/var/lib/kafka/data
+    # Avoid spawning a second JVM every 15s on a busy shared Docker host.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/9092'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+  kafka-init:
+    extends:
+      file: ../docker-compose.yml
+      service: kafka-init
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms32m -Xmx128m"
+      KAFKA_OPTS: "-XX:ActiveProcessorCount=2"
+  connect:
+    extends:
+      file: ../docker-compose.yml
+      service: connect
+    profiles: !reset []
+    environment:
+      KAFKA_OPTS: "-XX:ActiveProcessorCount=2"
+    ports: !override
+      - "127.0.0.1:${CDC_CONNECT_PORT:-18083}:8083"
+volumes:
+  cdc-postgres:
+  cdc-kafka:

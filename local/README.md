@@ -19,6 +19,8 @@ docker compose -f local/docker-compose.yml ps
 | Kafka (KRaft, Zookeeper 없음) | `apache/kafka:4.0.0` | 29092 |
 | 가짜 토스페이먼츠 (WireMock) | `wiremock/wiremock:3.9.1` | 59080 |
 
+Kafka 토픽은 `init/kafka/topics.tsv`와 `kafka-init`이 명시적으로 생성한다. 기존 알림·Live 토픽과 auto-create는 유지한다. Core Outbox CDC용 Connect는 선택 `cdc` 프로필이며 [구성·독립 검증·복구 절차](cdc/README.md)를 따른다. 독립 smoke는 기본 스택과 다른 project/포트/DB/볼륨을 사용한다.
+
 ## 외부 서비스 Mock
 
 외부 서비스 대신 응답하는 가짜 서버다. 기본 `up` 에 함께 뜬다. 응답 정의는 `mocks/<이름>/mappings/` 에 둔다.
