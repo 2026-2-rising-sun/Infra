@@ -5,6 +5,7 @@ commerce.coupon-info.v1 6 1 delete
 commerce.sales-info.v1 3 1 delete
 commerce.catalog.snapshots.v1 6 1 delete
 commerce.refund.requests.v1 3 1 delete
+commerce.refund.requests.v1.payment.dlt 3 1 delete
 payment.refund.results.v1 3 1 delete
 payment.execution.results.v1 3 1 delete
 _connect-catalog-configs 1 1 compact

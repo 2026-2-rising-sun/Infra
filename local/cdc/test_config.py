@@ -33,7 +33,7 @@ class ConfigurationTest(unittest.TestCase):
             cleanup = re.search(r"^    cleanup.policy: (.+)$", document, re.M)
             topics[name[1]] = (partitions, replicas, cleanup[1] if cleanup else "delete")
         self.assertEqual(expected, topics)
-        self.assertEqual(11, len(topics))
+        self.assertEqual(12, len(topics))
         for name in ["live.broadcast.v1", "commerce.payment-group.v1", "commerce.coupon-info.v1", "commerce.sales-info.v1"]:
             self.assertIn(name, topics)
         self.assertNotIn("commerce.coupon.events.v1", topics)
