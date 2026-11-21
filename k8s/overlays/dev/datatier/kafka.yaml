@@ -142,6 +142,18 @@ spec:
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
+  name: commerce.refund.requests.v1.payment.dlt
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
   name: payment.refund.results.v1
   labels:
     strimzi.io/cluster: kafka
