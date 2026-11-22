@@ -1,8 +1,6 @@
 #!/bin/bash
-# postgres 컨테이너 최초 기동 시(볼륨이 비어 있을 때)에만 실행된다.
-# POSTGRES_MULTIPLE_DATABASES 에 콤마로 나열된 서비스별 DB 를 하나씩 만든다.
-# 이미 데이터 볼륨이 있으면 실행되지 않으므로, DB 목록을 바꿨다면
-# 빠진 DB만 별도로 생성한다. 기존 볼륨을 삭제해 초기화하지 않는다 (local/README.md).
+# 최초 기동과 기존 볼륨의 수동 재실행에 같은 목록을 사용한다.
+# 이미 있는 DB와 소유자는 보존하고 빠진 DB만 만든다 (local/README.md).
 set -euo pipefail
 
 if [ -z "${POSTGRES_MULTIPLE_DATABASES:-}" ]; then
@@ -12,10 +10,17 @@ fi
 
 create_database() {
   local database="$1"
-  echo "DB 생성: 이름='${database}' 소유자='${POSTGRES_USER}'"
-  psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" <<-EOSQL
-    CREATE DATABASE "${database}" OWNER "${POSTGRES_USER}";
-EOSQL
+  if [[ ! "$database" =~ ^[a-z_][a-z0-9_]*$ ]] || (( ${#database} > 63 )); then
+    echo "잘못된 DB 이름: ${database}" >&2
+    return 1
+  fi
+  echo "DB 확인·추가: 이름='${database}' 소유자='${POSTGRES_USER}'"
+  psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" \
+    --set=database="$database" --set=owner="$POSTGRES_USER" <<'SQL'
+SELECT format('CREATE DATABASE %I OWNER %I', :'database', :'owner')
+WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'database')
+\gexec
+SQL
 }
 
 echo "서비스별 DB 생성 요청: ${POSTGRES_MULTIPLE_DATABASES}"
