@@ -1,11 +1,13 @@
 # local
 
-로컬 개발용 미들웨어 스택. Backend 서비스는 호스트에서 직접 실행하고, 의존 미들웨어만 컨테이너로 띄운다.
+Backend 로컬 미들웨어의 공통 실행 원본이다. PostgreSQL·Redis·Kafka·토픽 선언·CDC·가짜 토스와 테스트용 DB·Redis를 이곳에서 관리한다. Backend 서비스는 호스트에서 직접 실행한다. Backend의 별도 미들웨어 Compose는 제거하며 서비스별 DB 분리는 유지한다([Backend #388](https://github.com/2026-2-rising-sun/Backend/issues/388), [Infra #62](https://github.com/2026-2-rising-sun/Infra/issues/62)).
+
+다음 명령은 Infra 저장소 루트에서 실행한다. `.env` 복사는 최초 한 번만 수행하고 기존 설정을 덮어쓰지 않는다.
 
 ```sh
 cp local/.env.example local/.env     # 비밀번호 등 값 채우기
-docker compose -f local/docker-compose.yml up -d
-docker compose -f local/docker-compose.yml ps
+docker compose --env-file local/.env -f local/docker-compose.yml up -d --wait
+docker compose --env-file local/.env -f local/docker-compose.yml ps
 ```
 
 내리기: `down`은 PostgreSQL·Redis 등의 이름 있는 볼륨을 남기고, `down -v`는 볼륨까지 삭제한다. 기본 Kafka에는 데이터 볼륨이 없어 컨테이너를 다시 만들면 메시지와 offset을 잃는다.
@@ -16,6 +18,7 @@ docker compose -f local/docker-compose.yml ps
 |---|---|---|
 | PostgreSQL | `postgres:16-alpine` | 5432 |
 | Redis | `redis:7-alpine` | 6379 |
+| 회귀 전용 Redis (`tests` 프로필) | `redis:7-alpine` | 56379 (loopback) |
 | Kafka (KRaft, Zookeeper 없음) | `apache/kafka:4.0.0` | 29092 |
 | 가짜 토스페이먼츠 (WireMock) | `wiremock/wiremock:3.9.1` | 59080 |
 
@@ -68,8 +71,7 @@ docker compose -f local/docker-compose.yml --profile tools up -d
 
 ## Backend 연결 정보
 
-**이 값들이 Backend·Infra 두 레포 간 유일한 실질적 연결점이다.** 여기를 바꾸면 Backend 각 서비스의
-`application-local.yml` 도 같이 고쳐야 한다.
+아래 포트·계정은 Backend local 프로필의 기본 연결값과 맞춘다. Infra `local/.env`를 변경했다면 앱을 실행할 셸에도 같은 값을 전달한다. Compose의 `.env`는 호스트에서 실행한 Java 앱의 환경변수를 자동으로 설정하지 않는다. Backend 앱·인증 실행 명령은 [Backend 로컬 안내](https://github.com/2026-2-rising-sun/Backend/blob/dev/scripts/local/README.md)를 따른다.
 
 | 서비스 | DB 이름 | 로컬 실행 포트 |
 |---|---|---|
@@ -92,12 +94,35 @@ docker compose -f local/docker-compose.yml --profile tools up -d
 
 ## 서비스별 DB 생성
 
-`init/postgres/01-create-databases.sh` 가 `POSTGRES_MULTIPLE_DATABASES` 목록을 읽어 서비스별 DB 를 만든다.
-**데이터 볼륨이 비어 있을 때만 실행된다.** 이미 볼륨이 있으면 `down -v`(모든 DB 데이터 삭제) 대신 빠진 DB 만 만든다.
+`init/postgres/01-create-databases.sh`는 `POSTGRES_MULTIPLE_DATABASES` 목록을 읽어 빠진 DB만 만든다. 이미 있는 DB·소유자·테이블은 바꾸지 않는다. 새 볼륨에서는 PostgreSQL entrypoint가 자동 실행하며, 기존 볼륨은 아래처럼 수동 실행한다.
+
+기존 `local/.env`의 `POSTGRES_MULTIPLE_DATABASES`를 최신 `local/.env.example`의 목록과 맞춘다. 기존 업무 DB 이름을 제거하지 않고 필요한 서비스·테스트 DB를 추가한다. 컨테이너 설정을 반영할 때 project 이름·기존 볼륨·계정은 유지한다.
 
 ```bash
-for db in catalog commercecore payment; do
-  docker exec shoppinglive-postgres psql -U "${POSTGRES_USER:-shoppinglive}" -tc "SELECT 1 FROM pg_database WHERE datname = '$db'" | grep -q 1 \
-    || docker exec shoppinglive-postgres psql -U "${POSTGRES_USER:-shoppinglive}" -c "CREATE DATABASE \"$db\";"
-done
+docker compose --env-file local/.env -f local/docker-compose.yml up -d --wait postgres
+docker compose --env-file local/.env -f local/docker-compose.yml exec -T postgres \
+  bash /docker-entrypoint-initdb.d/01-create-databases.sh
 ```
+
+이 명령은 반복 실행할 수 있다. 기존 계정을 `.env`에서 바꾸는 것만으로 PostgreSQL의 실제 계정·비밀번호가 바뀌지는 않는다. DB를 추가하려고 `down -v`를 사용하지 않는다.
+
+## PostgreSQL·Redis 회귀 환경
+
+업무 DB와 별개로 `member_test`, `catalog_test`, `commercecore_test`, `payment_test`, `live_test`, `notification_test`를 초기화한다. 병렬 작업은 `catalog_product_test`, `commercecore_product_test`, `commercecore_payment_test`, `payment_execution_test` 등 서로 다른 DB를 지정한다. 같은 DB를 대상으로 초기화하는 테스트를 동시에 실행하지 않는다.
+
+Backend 테스트에는 서비스별 테스트 DB URL·사용자·비밀번호를 넘긴다. 예를 들어 Core는 `COMMERCECORE_TEST_POSTGRES_URL=jdbc:postgresql://localhost:5432/commercecore_test`와 `COMMERCECORE_TEST_POSTGRES_USER`, `COMMERCECORE_TEST_POSTGRES_PASSWORD`를 사용한다. 계정·포트는 `local/.env`와 맞추며 업무 DB를 테스트 URL로 사용하지 않는다. 다른 서비스의 실행 조건은 [Backend 도구 안내](https://github.com/2026-2-rising-sun/Backend/blob/dev/docs/guides/tooling.md#postgresqlredis-환경)에 있다.
+
+Redis 회귀는 앱과 다른 인스턴스를 사용한다.
+
+```sh
+# Infra 저장소 루트
+docker compose --env-file local/.env -f local/docker-compose.yml --profile tests up -d --wait redis-test
+```
+
+Backend 루트에서는 `LIVE_REDIS_TEST=1 LIVE_REDIS_PORT=56379 ./gradlew :services:live-service:redisTest`를 실행한다. 포트를 바꾸면 `REDIS_TEST_PORT`와 `LIVE_REDIS_PORT`를 함께 맞춘다. 테스트 Redis에는 업무 키를 저장하지 않는다.
+
+## 기존 Backend 스택에서 전환
+
+기존 Backend 격리 스택을 사용했다면 연결된 앱을 중지하고 DB URL·계정·Kafka·Redis 환경변수를 위 연결값으로 바꾼다. Payment의 `.env`도 확인한다. 기존 Backend 볼륨의 데이터는 자동 이전하지 않으며, 필요한 데이터 확인·백업 후 별도로 이행한다. 이전 스택·볼륨을 이 절차에서 자동 삭제하지 않는다.
+
+테스트를 별도 환경에서 반복할 때도 미들웨어 원본은 Infra 구성을 사용한다. [CDC 독립 검증](cdc/README.md)의 project·포트·DB·브로커는 기본 앱 환경과 구분한다. CDC smoke fixture 전달과 실제 Core 앱 → CDC → Catalog 반영 성공은 서로 다른 검증이다.

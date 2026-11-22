@@ -1,10 +1,9 @@
 # 로컬 개발용 미들웨어 스택 (PostgreSQL / Redis / Kafka)
 # 사용법:
-#   cp .env.example .env
+#   cp local/.env.example local/.env
 #   docker compose -f local/docker-compose.yml up -d
 #
-# Backend 각 서비스의 application-local.yml 이 여기 정의된 포트/자격증명을 그대로 사용한다.
-# 값을 바꾸면 Backend 레포의 application-local.yml 도 함께 고쳐야 한다. (../README.md 참고)
+# Backend local 프로필의 공통 미들웨어다. 연결값은 local/README.md를 따른다.
 
 name: shoppinglive-local
 
@@ -18,7 +17,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-shoppinglive}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       # init 스크립트가 아래 목록을 읽어 서비스별 DB 를 하나씩 생성한다.
-      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_MULTIPLE_DATABASES:-member,shopping,commerce,live,notification,catalog,commercecore,payment}
+      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_MULTIPLE_DATABASES:-member,shopping,commerce,live,notification,catalog,commercecore,payment,member_test,catalog_test,commercecore_test,payment_test,live_test,notification_test,catalog_product_test,commercecore_product_test,commercecore_payment_test,payment_execution_test}
       POSTGRES_DB: ${POSTGRES_USER:-shoppinglive}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -45,6 +44,18 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # 데이터 삭제를 사용하는 회귀는 앱 Redis와 분리한다.
+  redis-test:
+    image: redis:7-alpine
+    profiles: ["tests"]
+    ports:
+      - "127.0.0.1:${REDIS_TEST_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
 
   # Kafka 단일 브로커. 공식 Apache 이미지이고 4.x 는 KRaft 전용이라 Zookeeper 가 아예 없다.
   # 한 프로세스가 컨트롤러와 브로커를 겸한다.
