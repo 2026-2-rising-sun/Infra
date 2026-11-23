@@ -109,7 +109,7 @@ def main():
         info = kafka("kafka-topics.sh", "--describe", "--topic", topic)
         assert f"PartitionCount: {partitions}" in info and f"ReplicationFactor: {replicas}" in info, info
         assert "cleanup.policy=" + cleanup in info, info
-    checked("topic bootstrap twice is idempotent; 11 topics have explicit partitions/replication/cleanup")
+    checked("topic bootstrap twice is idempotent; 12 topics have explicit partitions/replication/cleanup")
     insert()  # Existing row must be emitted by initial snapshot.
     insert("commerce.refund.requests.v1", malformed=True)
     config = json.loads((ROOT / "connector.json").read_text())
