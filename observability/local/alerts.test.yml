@@ -1,0 +1,84 @@
+# alerts.yml 의 결제 DLT·미확정 알림 발화/미발화 검사. 실행: python3 -m unittest observability/local/test_alerts.py
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+
+tests:
+  - name: 결제·환불 DLT 유입은 울리고, 유입이 없거나 대상 밖 토픽이면 울리지 않는다
+    interval: 1m
+    input_series:
+      # 3분에 1건 유입
+      - series: 'kafka_topic_partition_current_offset{topic="payment.execution.results.v1.commercecore.dlt", partition="0"}'
+        values: '0 0 0 1 1 1 1 1 1 1 1 1 1 1 1'
+      # 보관 중인 메시지가 있어도 새 유입이 없으면 울리지 않는다
+      - series: 'kafka_topic_partition_current_offset{topic="commerce.refund.requests.v1.payment.dlt", partition="1"}'
+        values: '7x14'
+      # 원본 토픽과 다른 서비스 DLT 는 이 규칙 대상이 아니다
+      - series: 'kafka_topic_partition_current_offset{topic="payment.execution.results.v1", partition="0"}'
+        values: '0+10x14'
+      - series: 'kafka_topic_partition_current_offset{topic="live.broadcast.v1.notification.dlt", partition="0"}'
+        values: '0+1x14'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: PaymentDltMessageArrived
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: PaymentDltMessageArrived
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              topic: payment.execution.results.v1.commercecore.dlt
+            exp_annotations:
+              summary: "payment.execution.results.v1.commercecore.dlt 에 5분 동안 1건 유입"
+              description: "소비자가 처리하지 못한 메시지다. 원인은 소비 서비스 로그의 EVENT_SENT_TO_DLT(토픽·파티션·offset·원인 클래스)로 찾고, 원문은 Kafka UI 에서 DLT 토픽을 직접 본다."
+      # 유입 뒤 5분 넘게 조용하면 해결된다
+      - eval_time: 10m
+        alertname: PaymentDltMessageArrived
+        exp_alerts: []
+
+  - name: 미확정 건수가 0보다 크면 울리고 0·NaN 이면 울리지 않는다
+    interval: 1m
+    input_series:
+      - series: 'shoppinglive_payment_unresolved_count{service="payment-service", pod="a", kind="compensation_pending"}'
+        values: '0 0 2 2 2 2'
+      - series: 'shoppinglive_payment_unresolved_count{service="payment-service", pod="a", kind="payment_unknown"}'
+        values: '0x5'
+      # 조회 실패(NaN)만 있거나 다른 Pod 가 0 이면 울리지 않는다
+      - series: 'shoppinglive_payment_unresolved_count{service="payment-service", pod="a", kind="refund_unknown"}'
+        values: 'NaN NaN NaN NaN NaN NaN'
+      - series: 'shoppinglive_payment_unresolved_count{service="payment-service", pod="b", kind="payment_unknown"}'
+        values: 'NaN NaN NaN NaN NaN NaN'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: PaymentUnresolvedWork
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: PaymentUnresolvedWork
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: payment-service
+              kind: compensation_pending
+            exp_annotations:
+              summary: "compensation_pending 미확정 2건 (12분 초과)"
+              description: "결제·보상·환불 결과가 기준 시간을 넘겨 확정되지 않았다. payment-service 로그와 토스 상태 조회로 원인을 본다."
+
+  - name: 울리는 중 조회가 한 번 실패(NaN)해도 해결로 바뀌지 않고, 실제로 0 이 되면 5분 뒤 해결된다
+    interval: 1m
+    input_series:
+      - series: 'shoppinglive_payment_unresolved_count{service="payment-service", pod="a", kind="refund_unknown"}'
+        values: '1 1 NaN 1 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: PaymentUnresolvedWork
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              service: payment-service
+              kind: refund_unknown
+            exp_annotations:
+              summary: "refund_unknown 미확정 1건 (12분 초과)"
+              description: "결제·보상·환불 결과가 기준 시간을 넘겨 확정되지 않았다. payment-service 로그와 토스 상태 조회로 원인을 본다."
+      - eval_time: 10m
+        alertname: PaymentUnresolvedWork
+        exp_alerts: []

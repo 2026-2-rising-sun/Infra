@@ -6,9 +6,9 @@ Core `public.event_outbox`의 `topic = commerce.catalog.snapshots.v1` INSERT와 
 
 ## 토픽과 메시지
 
-`../init/kafka/topics.tsv`가 로컬 목록이며 `k8s/overlays/dev/datatier/kafka.yaml`과 검사한다. 새 업무 토픽은 `commerce.catalog.snapshots.v1`(6 partitions), `commerce.refund.requests.v1`, `payment.refund.results.v1`, `payment.execution.results.v1`(각 3 partitions)이다. 환불 요청을 처리하지 못하면 Payment가 `commerce.refund.requests.v1.payment.dlt`(3 partitions)로 보낸다. 기존 `commerce.payment-group.v1`, `commerce.coupon-info.v1`, `commerce.sales-info.v1`, `live.broadcast.v1`은 유지한다. 새 쿠폰 동기화 토픽은 없다. 기존 토픽 삭제·이름 변경과 전역 auto-create 비활성화는 하지 않는다.
+`../init/kafka/topics.tsv`가 로컬 목록이며 `k8s/overlays/dev/datatier/kafka.yaml`과 검사한다. 새 업무 토픽은 `commerce.catalog.snapshots.v1`(6 partitions), `commerce.refund.requests.v1`, `payment.refund.results.v1`, `payment.execution.results.v1`(각 3 partitions)이다. 환불 요청을 처리하지 못하면 Payment가 `commerce.refund.requests.v1.payment.dlt`로, 결제·환불 결과를 처리하지 못하면 CommerceCore가 `payment.execution.results.v1.commercecore.dlt`·`payment.refund.results.v1.commercecore.dlt`로 보낸다(각 3 partitions, 보관 30일 `retention.ms=2592000000`). DLT 유입 알림은 [`observability/local/alerts.yml`](../../observability/local/alerts.yml)의 `PaymentDltMessageArrived`다. 기존 `commerce.payment-group.v1`, `commerce.coupon-info.v1`, `commerce.sales-info.v1`, `live.broadcast.v1`은 유지한다. 새 쿠폰 동기화 토픽은 없다. 기존 토픽 삭제·이름 변경과 전역 auto-create 비활성화는 하지 않는다.
 
-단일 broker에서 모든 replica는 1이다. Connect config/offset/status 토픽은 각각 1 partition, replica 1, `cleanup.policy=compact`로 명시한다. 여러 broker로 확장할 때 업무 토픽뿐 아니라 내부 토픽·worker replication factor·min ISR을 함께 검토한다. 로컬 1 broker의 복구 검증은 운영 HA 증명이 아니다. `bootstrap.sh`는 `--if-not-exists` 생성만 하며 기존 partition/설정을 변경하지 않는다. 기존 토픽이 다른 설정이면 describe 결과를 확인하고 별도 변경한다.
+단일 broker에서 모든 replica는 1이다. Connect config/offset/status 토픽은 각각 1 partition, replica 1, `cleanup.policy=compact`로 명시한다. 여러 broker로 확장할 때 업무 토픽뿐 아니라 내부 토픽·worker replication factor·min ISR을 함께 검토한다. 로컬 1 broker의 복구 검증은 운영 HA 증명이 아니다. `bootstrap.sh`는 `--if-not-exists`로 생성하며 기존 partition·cleanup 설정은 변경하지 않는다. `topics.tsv` 5번째 열(`retention.ms`, `-`는 브로커 기본값)에 값이 있는 토픽만 매번 `kafka-configs.sh --alter`로 보관 기간을 맞추므로 이미 있던 DLT에도 30일이 반영된다. 그 밖의 설정이 다르면 describe 결과를 확인하고 별도 변경한다. auto-create로 먼저 생긴 토픽은 partition 수가 브로커 기본값으로 남으므로 DLT 토픽은 Backend 배포 전에 만든다.
 
 | Core column | Kafka |
 |---|---|
@@ -53,7 +53,7 @@ python3 local/cdc/verify-fixtures.py --project kafka-cdc-smoke-my-run \
 
 실제 producer → EventOutbox 직렬화 표본은 `--manifest /path/to/build/cdc-handoff/manifest.json --source-root /path/to/producer-repo`를 추가한다. 도구가 표본 bytes SHA와 현재 producer source SHA를 모두 manifest와 대조하며, 바뀌었으면 새 manifest를 요청하도록 실패한다. 결과에는 manifest SHA·표본/소스 SHA·원본 생성 명령과 그 생성 경로의 대역 범위를 기록한다. 이 검사는 해당 bytes의 실제 PostgreSQL INSERT → Connect → Kafka 전송을 증명하며, 표본 생성 시의 H2/Mockito 대역을 PostgreSQL 업무 트랜잭션이나 실제 앱 발행·소비 증거로 바꾸지 않는다.
 
-확인 항목은 bootstrap 두 번의 멱등성·12개 토픽 설정, Connect config validation/등록, 최초 snapshot과 streaming INSERT, key/봉투 원문/headers, 비대상 7개 토픽·HTTP 테이블 미발행, relay UPDATE/DELETE 미발행, Connect 중단 중 INSERT 후 복구, broker 재시작 후 복구, slot/WAL 진단이다. 비대상 미발행은 후속 Catalog INSERT를 WAL barrier로 삼아 검사한다. 실제 이미지 jar로 `FilterOrderSmoke.java`를 실행해 필수 payload 필드가 없는 비대상 행이 Filter에서 먼저 제거되고 역순이면 EventRouter schema 오류가 나는 것도 확인한다. 비영 종료·timeout·실패를 성공으로 처리하지 않는다.
+확인 항목은 bootstrap 두 번의 멱등성·14개 토픽 설정, Connect config validation/등록, 최초 snapshot과 streaming INSERT, key/봉투 원문/headers, 비대상 7개 토픽·HTTP 테이블 미발행, relay UPDATE/DELETE 미발행, Connect 중단 중 INSERT 후 복구, broker 재시작 후 복구, slot/WAL 진단이다. 비대상 미발행은 후속 Catalog INSERT를 WAL barrier로 삼아 검사한다. 실제 이미지 jar로 `FilterOrderSmoke.java`를 실행해 필수 payload 필드가 없는 비대상 행이 Filter에서 먼저 제거되고 역순이면 EventRouter schema 오류가 나는 것도 확인한다. 비영 종료·timeout·실패를 성공으로 처리하지 않는다.
 
 검증 뒤 컨테이너와 볼륨은 남는다. 확인 후 **본인이 만든 project만** 정리한다. `-v`는 사용하지 않는다.
 
