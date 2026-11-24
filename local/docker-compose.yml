@@ -92,7 +92,7 @@ services:
       timeout: 10s
       retries: 10
 
-  # 생성만 수행한다. 기존 토픽/알림/Live/DLT와 auto-create 설정은 보존한다.
+  # 없는 토픽을 생성하고 topics.tsv 에 보관 기간이 있는 토픽만 retention.ms 를 맞춘다. 그 밖의 기존 설정과 auto-create 는 보존한다.
   kafka-init:
     image: apache/kafka:4.0.0
     depends_on:

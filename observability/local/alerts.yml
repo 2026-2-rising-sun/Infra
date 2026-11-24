@@ -70,6 +70,35 @@ groups:
           summary: "Kafka 브로커 응답 없음"
           description: "kafka-exporter 가 브로커를 못 보고 있다. 방송 시작 이벤트와 알림 발송이 멈춘다. Outbox 는 쌓였다가 복구 후 재전송된다."
 
+      - alert: PaymentDltMessageArrived
+        # 결제·환불 DLT 의 끝 offset 이 5분 안에 늘었으면 새로 들어온 것이다. 보관 30일 동안 쌓인 양이 아니라 유입만 본다.
+        # 알림에는 토픽 이름과 건수만 담는다. 메시지 원문·key 는 DLT 토픽에만 있다.
+        expr: |
+          sum by (topic) (increase(kafka_topic_partition_current_offset{
+            topic=~`payment\.(execution|refund)\.results\.v1\.commercecore\.dlt|commerce\.refund\.requests\.v1\.payment\.dlt`
+          }[5m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.topic }} 에 5분 동안 {{ $value | humanize }}건 유입"
+          description: "소비자가 처리하지 못한 메시지다. 원인은 소비 서비스 로그의 EVENT_SENT_TO_DLT(토픽·파티션·offset·원인 클래스)로 찾고, 원문은 Kafka UI 에서 DLT 토픽을 직접 본다."
+
+  - name: payment
+    rules:
+      - alert: PaymentUnresolvedWork
+        # payment-service 가 12분을 넘겨 확정되지 않은 건수를 kind(payment_unknown·compensation_pending·refund_unknown)별로 낸다.
+        # 지표가 이미 12분 기준을 넘긴 건수라 대기(for) 없이 0 초과면 울린다. 같은 DB 를 보는 Pod 들의 값이 같아 max 로 합친다.
+        # 조회 실패 값은 NaN 이고 NaN > 0 은 거짓이라 새로 울리지 않는다. 울리는 중 한 번 NaN 이 나와도 해결로 바뀌지 않게 5분 유지한다.
+        expr: max by (service, kind) (shoppinglive_payment_unresolved_count) > 0
+        for: 0m
+        keep_firing_for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.kind }} 미확정 {{ $value | humanize }}건 (12분 초과)"
+          description: "결제·보상·환불 결과가 기준 시간을 넘겨 확정되지 않았다. payment-service 로그와 토스 상태 조회로 원인을 본다."
+
   - name: redis
     rules:
       - alert: RedisDown

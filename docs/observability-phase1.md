@@ -168,11 +168,20 @@ kubectl --context kind-shoppinglive-dev -n shoppinglive-observability port-forwa
 
 ### Slack 알림
 
-`observability/local/alerts.yml`의 규칙(서비스 다운·5xx 비율·p99·컨슈머 랙·Kafka/Redis 다운·Pod 재시작·오토스케일 상한)이 울리면 Alertmanager가 Slack으로 보낸다. webhook은 Secret `alertmanager-slack`에만 두고 Git에 넣지 않는다.
+`observability/local/alerts.yml`의 규칙(서비스 다운·5xx 비율·p99·컨슈머 랙·Kafka/Redis 다운·결제·환불 DLT 유입·결제 미확정 건수·Pod 재시작·오토스케일 상한)이 울리면 Alertmanager가 Slack으로 보낸다. webhook은 Secret `alertmanager-slack`에만 두고 Git에 넣지 않는다.
 
 ```sh
 SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...' python3 observability/local/deploy.py --apply
 ```
+
+결제·환불 알림은 두 개다. 알림에는 토픽·kind 같은 라벨과 건수만 담고 메시지 원문·key·결제 정보는 넣지 않는다.
+
+| 알림 | 조건 | 지표 출처 |
+|---|---|---|
+| `PaymentDltMessageArrived` | `commerce.refund.requests.v1.payment.dlt`, `payment.{execution,refund}.results.v1.commercecore.dlt`의 끝 offset이 5분 안에 증가 | 관측 스택의 `kafka-exporter`(`--topic.filter=.*`) `kafka_topic_partition_current_offset` |
+| `PaymentUnresolvedWork` | `max by (service, kind) (shoppinglive_payment_unresolved_count) > 0`, 울린 뒤 5분 유지(`keep_firing_for`) | payment-service `/actuator/prometheus` ([Backend #387](https://github.com/2026-2-rising-sun/Backend/issues/387)) |
+
+`shoppinglive_payment_unresolved_count`는 payment-service가 `shoppinglive.observability.enabled=true`로 떠 있고 `applications` job이 그 Pod를 긁을 때만 생긴다. 지금 `k8s/base`에는 payment-service가 없고 `applications` job의 `app` 라벨 필터에도 `payment`가 없으므로, payment-service를 배포할 때 필터를 함께 넣어야 이 알림이 동작한다. dev Kafka는 `storage: ephemeral`이라 브로커가 다시 뜨면 DLT 메시지는 30일 보관과 관계없이 사라진다. 규칙 검사는 `python3 -m unittest observability/local/test_alerts.py`(Docker `prom/prometheus:v3.5.0`의 promtool)로 한다.
 
 환경변수 없이 실행하면 자리표시자 Secret이 만들어져 전송이 실패하고 `kubectl -n shoppinglive-observability logs deploy/alertmanager`에 `Notify attempt failed`로 남는다. 설정 뒤 같은 명령을 다시 실행하면 Secret이 갱신된다. Grafana의 Alerting 메뉴(데이터소스 Alertmanager)에서도 현재 알림과 silence를 볼 수 있다.
 

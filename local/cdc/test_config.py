@@ -19,8 +19,8 @@ class ConfigurationTest(unittest.TestCase):
         expected = {}
         for line in (ROOT / "local/init/kafka/topics.tsv").read_text().splitlines():
             if line and not line.startswith("#"):
-                name, partitions, replicas, cleanup = line.split()
-                expected[name] = (int(partitions), int(replicas), cleanup)
+                name, partitions, replicas, cleanup, retention = line.split()
+                expected[name] = (int(partitions), int(replicas), cleanup, retention)
         topics = {}
         for document in (ROOT / "k8s/overlays/dev/datatier/kafka.yaml").read_text().split("---"):
             if "kind: KafkaTopic" not in document:
@@ -31,12 +31,20 @@ class ConfigurationTest(unittest.TestCase):
             partitions = int(re.search(r"^  partitions: (\d+)$", document, re.M)[1])
             replicas = int(re.search(r"^  replicas: (\d+)$", document, re.M)[1])
             cleanup = re.search(r"^    cleanup.policy: (.+)$", document, re.M)
-            topics[name[1]] = (partitions, replicas, cleanup[1] if cleanup else "delete")
+            retention = re.search(r"^    retention.ms: (\d+)$", document, re.M)
+            topics[name[1]] = (partitions, replicas, cleanup[1] if cleanup else "delete",
+                               retention[1] if retention else "-")
         self.assertEqual(expected, topics)
-        self.assertEqual(12, len(topics))
+        self.assertEqual(14, len(topics))
         for name in ["live.broadcast.v1", "commerce.payment-group.v1", "commerce.coupon-info.v1", "commerce.sales-info.v1"]:
             self.assertIn(name, topics)
         self.assertNotIn("commerce.coupon.events.v1", topics)
+        dlts = {name for name in topics if name.endswith(".dlt")}
+        self.assertEqual({"commerce.refund.requests.v1.payment.dlt",
+                          "payment.execution.results.v1.commercecore.dlt",
+                          "payment.refund.results.v1.commercecore.dlt"}, dlts)
+        for name in dlts:
+            self.assertEqual("2592000000", topics[name][3], name)  # 30일
 
     def test_smoke_project_does_not_inherit_shared_names_ports_volumes(self):
         config = compose_json("local/cdc/docker-compose.yml")

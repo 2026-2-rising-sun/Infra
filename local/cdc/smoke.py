@@ -105,11 +105,12 @@ def main():
     for line in (ROOT.parent / "init/kafka/topics.tsv").read_text().splitlines():
         if not line or line.startswith("#"):
             continue
-        topic, partitions, replicas, cleanup = line.split()
+        topic, partitions, replicas, cleanup, retention = line.split()
         info = kafka("kafka-topics.sh", "--describe", "--topic", topic)
         assert f"PartitionCount: {partitions}" in info and f"ReplicationFactor: {replicas}" in info, info
         assert "cleanup.policy=" + cleanup in info, info
-    checked("topic bootstrap twice is idempotent; 12 topics have explicit partitions/replication/cleanup")
+        assert retention == "-" or "retention.ms=" + retention in info, info
+    checked("topic bootstrap twice is idempotent; 14 topics have explicit partitions/replication/cleanup/retention")
     insert()  # Existing row must be emitted by initial snapshot.
     insert("commerce.refund.requests.v1", malformed=True)
     config = json.loads((ROOT / "connector.json").read_text())

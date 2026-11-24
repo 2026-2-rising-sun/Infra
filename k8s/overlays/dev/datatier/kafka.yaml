@@ -150,6 +150,8 @@ spec:
   replicas: 1
   config:
     cleanup.policy: delete
+    # DLT는 사람이 원인을 보고 처리할 때까지 남겨 둔다(30일). 브로커 저장소가 ephemeral 이면 재시작 때 사라진다.
+    retention.ms: 2592000000
 ---
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
@@ -166,6 +168,20 @@ spec:
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
+  name: payment.refund.results.v1.commercecore.dlt
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    cleanup.policy: delete
+    # DLT는 사람이 원인을 보고 처리할 때까지 남겨 둔다(30일). 브로커 저장소가 ephemeral 이면 재시작 때 사라진다.
+    retention.ms: 2592000000
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
   name: payment.execution.results.v1
   labels:
     strimzi.io/cluster: kafka
@@ -174,6 +190,20 @@ spec:
   replicas: 1
   config:
     cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: payment.execution.results.v1.commercecore.dlt
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    cleanup.policy: delete
+    # DLT는 사람이 원인을 보고 처리할 때까지 남겨 둔다(30일). 브로커 저장소가 ephemeral 이면 재시작 때 사라진다.
+    retention.ms: 2592000000
 ---
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
