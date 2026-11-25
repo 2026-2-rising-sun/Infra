@@ -13,7 +13,7 @@ k8s/
 │   ├── dev/
 │   │   ├── kustomization.yaml    # services + datatier 를 묶는다
 │   │   ├── services/             # base + namePrefix(dev-) + replica/리소스/프로필 patch
-│   │   ├── datatier/             # dev 전용 Postgres/Redis/Kafka
+│   │   ├── datatier/             # dev 전용 Postgres/Redis/Kafka/Elasticsearch
 │   │   ├── scaling/              # KEDA ScaledObject (서비스별 파드 수 상·하한과 스케일링 신호)
 │   │   └── tools/                # Kafka UI, Redis Insight (수동 적용, ArgoCD 동기화 대상 아님)
 │   └── {perf,demo}/kustomization.yaml

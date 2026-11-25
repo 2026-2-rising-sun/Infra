@@ -23,6 +23,17 @@ KUBE_CONTEXT=kind-other ./platform/kind/install.sh
 - AWS 에서는 같은 차트를 쓰되 EnvoyProxy 를 NLB 용으로 바꾸고 ArgoCD 가 설치한다(terraform/argocd 단계).
 - 팀 체험 환경(`make setup`, 클러스터 `shoppinglive-team`)은 아직 Frontend 의 스크립트가 Kafka 를 직접 띄운다. 그쪽 전환은 별도 작업이다.
 
+## Elasticsearch 이미지
+
+`k8s/overlays/dev/datatier/elasticsearch.yaml` 은 Nori 한국어 분석기를 넣은 `shoppinglive/elasticsearch-nori:8.18.8` 을 쓴다. 레지스트리에 올리지 않으므로 dev overlay 를 적용하기 전에 한 번 만들어 kind 에 넣는다.
+
+```sh
+docker compose -f local/docker-compose.yml build elasticsearch
+kind load docker-image shoppinglive/elasticsearch-nori:8.18.8 --name shoppinglive-dev
+```
+
+클러스터 안의 서비스는 `http://elasticsearch:9200` 으로 붙는다. 아직 kind 에는 catalog-service 가 없어서 실제로 붙는 서비스는 없다.
+
 ## 서비스 이미지 (`build-images.sh`)
 
 `k8s/base` 의 Deployment 는 `ghcr.io/2026-2-rising-sun/<service>-service` 를 가리키지만 CI 가 아직 이미지를 올리지 않는다.

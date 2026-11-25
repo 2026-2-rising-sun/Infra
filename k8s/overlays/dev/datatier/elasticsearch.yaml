@@ -1,0 +1,89 @@
+# dev 전용 Elasticsearch. local/docker-compose.yml 의 elasticsearch 서비스를 k8s 로 옮긴 것이다.
+# Catalog 상품 검색 색인을 받는다. 서비스는 http://elasticsearch:9200 으로 붙는다(CATALOG_ELASTICSEARCH_URIS).
+#
+# 이미지는 local/elasticsearch/Dockerfile 로 만든 Nori 포함 이미지다. 레지스트리에 없으므로 kind 에 직접 넣는다.
+#   docker compose -f local/docker-compose.yml build elasticsearch
+#   kind load docker-image shoppinglive/elasticsearch-nori:8.18.8 --name shoppinglive-dev
+#
+# 볼륨은 emptyDir 이라 pod 가 다시 뜨면 색인이 사라진다. 원본은 Catalog DB 라 전체 색인으로 다시 채운다.
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  labels:
+    app.kubernetes.io/name: elasticsearch
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: elasticsearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch
+  labels:
+    app.kubernetes.io/name: elasticsearch
+    app.kubernetes.io/part-of: shoppinglive
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: elasticsearch
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: elasticsearch
+        app.kubernetes.io/part-of: shoppinglive
+    spec:
+      containers:
+        - name: elasticsearch
+          image: shoppinglive/elasticsearch-nori:8.18.8
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: discovery.type
+              value: single-node
+            # dev 확인용이라 보안(아이디, 비밀번호, TLS)을 끈다. 클러스터 밖으로 열지 않는다.
+            - name: xpack.security.enabled
+              value: "false"
+            - name: cluster.routing.allocation.disk.threshold_enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+          ports:
+            - name: http
+              containerPort: 9200
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health?wait_for_status=yellow&timeout=1s
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            # 힙 512Mi 에 JVM 바깥 메모리를 더한 값이다.
+            requests:
+              cpu: 100m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+      volumes:
+        - name: data
+          emptyDir: {}
