@@ -21,6 +21,9 @@ docker compose --env-file local/.env -f local/docker-compose.yml ps
 | 회귀 전용 Redis (`tests` 프로필) | `redis:7-alpine` | 56379 (loopback) |
 | Kafka (KRaft, Zookeeper 없음) | `apache/kafka:4.0.0` | 29092 |
 | 가짜 토스페이먼츠 (WireMock) | `wiremock/wiremock:3.9.1` | 59080 |
+| Elasticsearch + Nori (단일 노드) | `shoppinglive/elasticsearch-nori:8.18.8` (로컬 빌드) | 9200 (loopback) |
+
+Elasticsearch 이미지는 `elasticsearch/Dockerfile`로 공식 8.18.8 이미지에 한국어 분석기 `analysis-nori`를 설치해 만든다. 처음 `up` 할 때 자동으로 빌드한다. 버전은 Backend catalog-service의 Elasticsearch 클라이언트와 맞춘다. 로컬 전용이라 보안을 껐고, 색인 데이터는 `elasticsearch-data` 볼륨에 남는다.
 
 Kafka 토픽은 `init/kafka/topics.tsv`와 `kafka-init`이 명시적으로 생성한다. 기존 알림·Live 토픽과 auto-create는 유지한다. Core Outbox CDC용 Connect는 선택 `cdc` 프로필이며 [구성·독립 검증·복구 절차](cdc/README.md)를 따른다. 독립 smoke는 기본 스택과 다른 project/포트/DB/볼륨을 사용한다.
 
@@ -88,6 +91,16 @@ docker compose -f local/docker-compose.yml --profile tools up -d
 - Redis: `localhost:6379`
 - Kafka bootstrap servers: `localhost:29092`
   컨테이너 **안에서** 붙을 때는 `kafka:9092` 다. 리스너가 둘로 나뉘어 있다.
+- Elasticsearch: `http://localhost:9200` (아이디, 비밀번호 없음)
+  catalog-service는 `CATALOG_ELASTICSEARCH_URIS`로 이 주소를 받으며 기본값이 같다. Backend ES 테스트는 `CATALOG_TEST_ES_URL=http://localhost:9200 ./gradlew :services:catalog-service:elasticsearchTest`로 돌린다. 이 테스트는 `products_*` 인덱스를 지우므로 로컬에서 색인한 데이터도 사라진다.
+
+Nori가 설치됐는지는 아래처럼 확인한다.
+
+```sh
+curl -s 'localhost:9200/_cat/plugins?v'          # analysis-nori 가 보여야 한다
+curl -s -H 'Content-Type: application/json' localhost:9200/_analyze \
+  -d '{"analyzer":"nori","text":"무선 블루투스 이어폰을 할인합니다"}'
+```
 
 > 서비스별 포트 8081~8086 은 여러 서비스를 한 호스트에 동시에 띄울 때 충돌을 피하기 위한 것이다.
 > 쿠버네티스에서는 파드마다 주소가 달라 전부 8080 을 쓴다 (`k8s/README.md` 참고).
