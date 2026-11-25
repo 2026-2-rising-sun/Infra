@@ -13,7 +13,7 @@ P2 팀 설명 문서는 [P2 문서 모음](https://app.notion.com/p/3ec226545d15
 
 ```
 Infra/
-├── local/           # 로컬 개발용 Postgres/Redis/Kafka (docker compose)
+├── local/           # 로컬 개발용 Postgres/Redis/Kafka/Elasticsearch (docker compose)
 ├── k8s/             # kustomize base + overlays/{dev,perf,demo}
 ├── platform/        # kind 에 플랫폼 구성 요소(Gateway API, Envoy Gateway, Strimzi) 설치
 ├── terraform/       # AWS 인프라 코드 (골격만)
@@ -37,7 +37,7 @@ cp local/.env.example local/.env     # 값 채우기
 docker compose -f local/docker-compose.yml up -d
 ```
 
-Postgres(5432, 서비스별 DB) · Redis(6379) · Kafka(29092) · 가짜 토스페이먼츠(59080)가 뜹니다.
+Postgres(5432, 서비스별 DB) · Redis(6379) · Kafka(29092) · 가짜 토스페이먼츠(59080)가 뜹니다. Catalog 검색용 Elasticsearch(9200, Nori 포함)도 함께 뜹니다.
 Backend 서비스는 호스트에서 직접 실행하고 여기에 붙습니다. 접속 정보는 [`local/README.md`](local/README.md) 참고.
 
 ## 서비스 진입점

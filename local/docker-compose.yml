@@ -1,4 +1,4 @@
-# 로컬 개발용 미들웨어 스택 (PostgreSQL / Redis / Kafka)
+# 로컬 개발용 미들웨어 스택 (PostgreSQL / Redis / Kafka / Elasticsearch)
 # 사용법:
 #   cp local/.env.example local/.env
 #   docker compose -f local/docker-compose.yml up -d
@@ -152,6 +152,29 @@ services:
     volumes:
       - ./mocks/toss:/home/wiremock:ro
 
+  # Catalog 상품 검색용 Elasticsearch 단일 노드. 이미지에 Nori 한국어 분석기를 넣어 빌드한다(elasticsearch/Dockerfile).
+  # 로컬 전용이라 보안(아이디, 비밀번호, TLS)을 끄고 loopback 에만 연다.
+  elasticsearch:
+    image: shoppinglive/elasticsearch-nori:8.18.8
+    build: ./elasticsearch
+    container_name: shoppinglive-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      # 노트북 디스크가 차도 인덱스가 읽기 전용으로 바뀌지 않게 한다.
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "127.0.0.1:${ELASTICSEARCH_PORT:-9200}:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
   # --- 확인용 관리 UI (tools 프로필) ---
   # 기본 `up` 에는 포함되지 않는다. 필요할 때만:
   #   docker compose -f local/docker-compose.yml --profile tools up -d
@@ -190,3 +213,4 @@ volumes:
   postgres-data:
   redis-data:
   redisinsight-data:
+  elasticsearch-data:
